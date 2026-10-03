@@ -1,0 +1,22 @@
+# ESP-IDF
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+
+# Python-generated files
+__pycache__/
+*.py[oc]
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# tools/ outputs and model weights
+output/
+image1.jpg
+models
+LICENSE
+*.pt
