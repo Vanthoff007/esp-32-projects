@@ -26,7 +26,7 @@ Related docs:
 
 | Item | Value | Source | Status |
 |---|---|---|---|
-| Board | DFRobot **DFR1154** "ESP32-S3 AI Camera Module" | `resources/`, README | ✅ |
+| Board | DFRobot **DFR1154** "ESP32-S3 AI Camera Module", hardware **v1.1** | `resources/`, README, user | ✅ |
 | SoC | ESP32-S3, silicon rev **v0.2**, 2 cores, Wi-Fi/BLE | hello_world boot log | ✅ |
 | Flash | **16 MB** Winbond, **DIO** mode, 80 MHz | boot log (`detected chip: winbond`, `flash io: dio`) | ✅ |
 | PSRAM | **8 MB**, **Octal** mode | menuconfig test on hello_world; esp-dl example ran | ✅ |
@@ -34,8 +34,22 @@ Related docs:
 | Status LED | GPIO3, active-high | firmware test | ✅ |
 | IR LEDs | GPIO47 → `IR_CTL` → EN of SY7200A boost LED driver (U2), active-high | schematic v1.1 + firmware | ✅ (ticked in the project tracker; how the glow was seen wasn't recorded) |
 | Power LED (D8) | Wired to 3.3 V, can't be switched off in code | schematic v1.1 | from schematic |
+| Power inputs | **USB-C** VBUS → diode D9, and 2-pin **P4 "Vin 3.7~15V"** → diode D10, both into the JW3651 3.3 V buck (U12). See [A.1](#a1-powering-the-board) | schematic v1.1 | from schematic |
 
 Datasheets, schematics (v1.0, v1.1) and dimensions are in [`../resources/`](../resources/).
+
+### A.1 Powering the board
+
+From schematic v1.1 (bottom-left block). The two power inputs are **diode-OR'd**:
+
+| Setup | Works? | Notes |
+|---|---|---|
+| USB-C cable to the laptop only | ✅ in use | Power and data (flash, monitor) over one cable |
+| Phone charger (5 V, ≥ 2 A) on USB-C | ✅ expected | Runs on its own: boots, joins Wi-Fi, serves `http://night-sentinel.local/`. No serial log or flashing. The status LED turns on when it's online |
+| **5–12 V on VIN (P4) + USB-C to the laptop** | ✅ by design, ⏳ not tried | The higher voltage powers the board. Diodes D9/D10 stop the VIN supply from feeding back into the laptop's USB port. Data still goes over USB. Check the P4 connector type in the DFRobot wiki and the polarity (+ / GND) before wiring |
+| Powered USB hub between laptop and board | ✅ expected | Data from the laptop, power from the hub's adapter |
+
+Measured 2026-10-23: lowering Wi-Fi TX power from 20 to 8.5 dBm didn't change the image row noise (2.42 → 2.46), so the laptop USB supply isn't causing image noise. Details in [issues_log.md](issues_log.md).
 
 ### Development machine
 
@@ -118,18 +132,20 @@ idf.py -p COM5 monitor
 - **Settings:** 115 200 baud (`CONFIG_ESPTOOLPY_MONITOR_BAUD=115200` in `sdkconfig`), 8N1. On the USB Serial/JTAG port the baud rate doesn't actually limit speed.
 - Usually combined with flashing: `idf.py -p COM5 flash monitor` ✅ (this is the form that was actually used).
 
-Expected output with the current project firmware (`main/app_main.c`, the Day 2 frame-rate test, recorded 2026-10-23):
+Expected output with the current project firmware (`main/app_main.c`: camera, Wi-Fi, debug web server). ✅ verified 2026-10-23:
 
 ```
-I (1086) camera: Detected OV3660 camera
-I (1446) ov3660: Calculated VCO: 160000000 Hz, PLLCLK: 160000000 Hz, SYSCLK: 40000000 Hz, PCLK: 20000000 Hz
-I (1446) camera: camera ready (sensor PID 0x3660)
-I (1446) main: camera init OK
-I (91576) main: grabbed 1000 frames in 90124 ms, 0 failures, 11 fps, free memory: 8077692 -> 8077692
-I (91576) main_task: Returned from app_main()
+I (...) ov3660: Calculated VCO: 240000000 Hz, PLLCLK: 120000000 Hz, SYSCLK: 30000000 Hz, PCLK: 15000000 Hz
+I (...) camera: camera ready (sensor PID 0x3660)
+I (...) main: camera init OK
+I (...) wifi: connecting to "<your SSID>"
+I (...) wifi: got IP 192.168.x.x
+I (...) main: wifi OK
+I (...) mdns: open http://night-sentinel.local/
+I (...) http: debug server on port 80: /, /stream, /snap.jpg
 ```
 
-The result line takes about 90 s to appear. After it, the board sits idle.
+With an empty SSID it logs `E wifi: no SSID: set it in idf.py menuconfig -> Night Sentinel Wi-Fi` instead. To re-run the 1,000-frame capture test, set `RUN_CAPTURE_TEST` to 1 in `app_main.c`.
 
 ### B.4 Exit the monitor
 
@@ -270,6 +286,10 @@ deactivate                                                         # to leave
 | ESP-IDF project root | `D:\Projects\od` (has `CMakeLists.txt`, `project(night-sentinel)`) |
 | App component | `main/` (`app_main.c`) |
 | Board drivers | `components/board/` (`board_pins.h`, `status_led.c`, `ir.c`) |
+| Camera | `components/camera/` (`ns_cam_init/grab/release`) |
+| Wi-Fi + mDNS | `components/net/` (`ns_wifi_connect`, `ns_mdns_start`; SSID/password menu in its `Kconfig`) |
+| Debug web server | `components/debug_http/` (`/`, `/stream`, `/snap.jpg`) |
+| Partition table | `partitions.csv` |
 | Committed config | `sdkconfig.defaults` |
 | Generated, git-ignored | `build/`, `sdkconfig`, `sdkconfig.old`, `managed_components/` |
 
@@ -418,13 +438,13 @@ python -m esptool --chip esp32s3 -b 460800 --before default-reset --after hard-r
 | Item | Value | Status |
 |---|---|---|
 | Flash | 16 MB, DIO, 80 MHz. `docs/notes.md` records that QIO @ 80 MHz also worked when the esp-dl example used it; the project stays on DIO. | ✅ |
-| Partition table | Default **single app**, 1 MB factory partition (`CONFIG_PARTITION_TABLE_SINGLE_APP=y`) | ✅ current |
-| App size | 0x2c530 bytes (≈178 KB), 83 % of the partition free | ✅ 2026-10-23 |
+| Partition table | **Custom** [`partitions.csv`](../partitions.csv): nvs 24 KB, phy_init 4 KB, **factory app 6 MB** (`CONFIG_PARTITION_TABLE_CUSTOM=y`). Changed 2026-10-23: with Wi-Fi linked in, the app was 91% of the old 1 MB partition. | ✅ flashed, boot log shows `factory ... 00600000` |
+| App size | 0xf3290 bytes (≈973 KB) with Wi-Fi, HTTP server and mDNS, 84% of the partition free | ✅ 2026-10-23 |
 | Internal RAM (DIRAM) | 51 954 / 341 760 bytes used (15.2 %) | ✅ `idf.py size` |
-| PSRAM | 8 MB octal, `CONFIG_SPIRAM_USE_MALLOC=y`, speed 40 MHz in the project's `sdkconfig`. The esp-dl example used 80 MHz. | ✅ works |
+| PSRAM | 8 MB octal, `CONFIG_SPIRAM_USE_MALLOC=y`, **80 MHz** (`CONFIG_SPIRAM_SPEED_80M`, since 2026-10-23; it was 40 MHz). Boot log: `esp_psram: Speed: 80MHz`, `SPI SRAM memory test OK` | ✅ works |
 | CPU | 240 MHz | ✅ |
 
-> ⏳ **Needs doing before esp-dl goes into the project:** the `pedestrian_detect` app alone was about 2.7 MB, which doesn't fit the default 1 MB factory partition. The build plan calls for a custom `partitions.csv` with a factory partition of at least 6 MB.
+> ✅ The 6 MB factory partition also leaves room for esp-dl (the `pedestrian_detect` app alone was about 2.7 MB).
 
 **How PSRAM was first enabled (hello_world, ✅):** hello_world uses `idf_build_set_property(MINIMAL_BUILD ON)`, which hides the **ESP PSRAM** menu. The fix was to add `esp_psram` to `main/CMakeLists.txt` (`PRIV_REQUIRES spi_flash esp_psram`), then run `idf.py reconfigure` and `idf.py menuconfig` and set:
 - **Serial flasher config → Flash size → 16 MB**
@@ -521,28 +541,62 @@ idf.py -p COM5 flash monitor      # 🔥 replaces the project firmware
 ### E.4 In progress and not started
 
 - **Day 2, 2026-10-23:**
-  - ✅ `idf.py add-dependency "espressif/esp32-camera"` run from `D:\Projects\od`. `dependencies.lock` resolved `espressif/esp32-camera` **2.1.8**, which pulls in `espressif/esp_jpeg` **1.3.1**.
-  - ✅ `components/camera/` (`ns_cam_init`, `ns_cam_grab`, `ns_cam_release`) and the 1,000-frame FPS test in `app_main.c` work on the board: **11.1 FPS, 0 NULL frames, PSRAM stable**. See [E.5](#e5-camera-clocks-and-frame-rate).
-  - ⏳ Not committed yet. Data types are in [section I](#i-data-types-used-in-the-firmware).
-- Not started: Wi-Fi, `/snap.jpg`.
-- Wi-Fi station and HTTP server.
-- Unit tests (Unity). The planned layout is `components/board/test/` plus a `test/` project modelled on `C:\esp\v6.1\esp-idf\examples\system\unit_test`.
-- Bringing esp-dl into the project, the partition table change, and model or quantization work.
+  - ✅ `espressif/esp32-camera` **2.1.8** (pulls in `espressif/esp_jpeg` **1.3.1**) in `main/idf_component.yml`.
+  - ✅ `components/camera/` (`ns_cam_init`, `ns_cam_grab`, `ns_cam_release`): **16.6 FPS, 0 NULL and 0 short frames, PSRAM stable** at SYSCLK 30 / PCLK 15 MHz. See [E.5](#e5-camera-clocks-and-frame-rate).
+  - ✅ Wi-Fi station (`components/net/wifi.c`, SSID/password in menuconfig → **Night Sentinel Wi-Fi**). Reconnects forever.
+  - ✅ mDNS (`espressif/mdns` **1.14.0**, `components/net/ns_mdns.c`): `night-sentinel.local`.
+  - ✅ Debug web server (`components/debug_http/`): `/`, `/stream`, `/snap.jpg`. See [E.6](#e6-viewing-the-camera).
+  - ✅ `tools/grab_snaps.py`, which saves snapshots to `test-results/day2/`.
+  - 🟡 Horizontal lines seen in the browser live view; not found in the frames themselves. See [issues_log.md](issues_log.md).
+- Not started: unit tests (Unity; planned layout `components/board/test/` + a `test/` project modelled on `C:\esp\v6.1\esp-idf\examples\system\unit_test`).
+- Not started: bringing esp-dl into the project, and model or quantization work.
 
 ### E.5 Camera clocks and frame rate
 
-✅ Measured 2026-10-23: QVGA RGB565, `fb_count = 2`, `CAMERA_GRAB_LATEST`, 1,000 frames each.
+✅ Measured 2026-10-23: QVGA RGB565, `fb_count = 2`, `CAMERA_GRAB_LATEST`, 1,000 frames each. "Short frames" counts the driver's `cam_hal: FB-SIZE: ... != 153600` lines. These are frames the driver throws away without returning NULL.
 
-| Clock setting | Log line (`ov3660: Calculated ...`) | Result |
-|---|---|---|
-| Driver default | `SYSCLK: 20000000 Hz, PCLK: 10000000 Hz` | **5.5 FPS** (180.2 s), 0 NULL frames |
-| `set_pll(s, 0, 8, 1, 0, 0, 0, 1, 8)`: SYSCLK doubled only | `SYSCLK: 40000000 Hz, PCLK: 10000000 Hz` | **No frames at all**: `cam_hal: Failed to get frame: timeout` every 4 s |
-| `set_pll(s, 0, 8, 1, 0, 0, 0, 1, 4)`: both doubled (**in use**) | `SYSCLK: 40000000 Hz, PCLK: 20000000 Hz` | **11.1 FPS** (90.1 s), 0 NULL frames, PSRAM 8,077,692 → 8,077,692 bytes |
+| Clock setting | Log line (`ov3660: Calculated ...`) | Good FPS | Short frames |
+|---|---|---|---|
+| Driver default | `SYSCLK: 20000000 Hz, PCLK: 10000000 Hz` | 5.5 (180.3 s) | 0 |
+| `set_pll(s, 0, 12, 1, 0, 0, 2, 1, 4)` (**in use**) | `SYSCLK: 30000000 Hz, PCLK: 15000000 Hz` | **16.6** (60.2 s) | **0** |
+| `set_pll(s, 0, 8, 1, 0, 0, 0, 1, 4)` | `SYSCLK: 40000000 Hz, PCLK: 20000000 Hz` | 11.1 (90.1 s) | 1,207: about every other frame is 216 of 240 lines |
+| `set_pll(s, 0, 8, 1, 0, 0, 0, 1, 8)` | `SYSCLK: 40000000 Hz, PCLK: 10000000 Hz` | 0 | none arrive: `cam_hal: Failed to get frame: timeout` every 4 s |
 
-- **Why the default is slow:** at QVGA the driver sets a frame of 2300 × 783 clock cycles (line length × binned frame height, from `ov3660_settings.h`). At 20 MHz that is 90 ms per pass, and the measured frame period is 180 ms. The driver's own "10.25 FPS" comment is wrong.
-- **Ruled out:** lighting (a torch in front of the lens changed nothing) and frame buffers (`fb_count = 3` gave exactly the same 180 s).
+PSRAM free was 8,077,692 bytes before and after every run.
+
+- **Frame timing:** at QVGA the driver sets a frame of 2300 × 783 clock cycles (line length × binned frame height, from `ov3660_settings.h`). At 30 MHz that is 60 ms, which matches the 16.6 FPS measured.
+- **At 20 MHz PCLK:** the camera interface loses the end of about every other frame.
+- **At the default clocks:** half the theoretical rate (5.5 instead of about 11 FPS). Lighting and `fb_count = 3` made no difference.
 - **`set_pll` argument order** (the public function): `bypass, multiplier, sys_div, root_2x, pre_div, seld5, pclk_manual, pclk_div`. The driver's internal `set_pll` swaps `root_2x` and `pre_div`.
-- ⏳ **Image quality at 20 MHz PCLK is not checked yet.** That is close to the limit of the ESP32-S3 camera interface. If `/snap.jpg` shows streaks, shifted lines or wrong colours, remove the `set_pll` line first.
+- **⚠️ Lesson:** a capture test must also count `FB-SIZE` lines. The first 40/20 MHz result was reported as "11.1 FPS, 0 failures" because the log filter skipped these unprefixed lines.
+- ✅ **Pixel quality at 30/15 MHz:** snapshots are clean and correctly coloured. The plain-wall test showed no horizontal noise lines.
+
+**With Wi-Fi on and `/stream` running** (45 s stream + 5 snapshots per run, ~57 s):
+
+| Setting | `FB-SIZE` drops | Stream FPS | Result |
+|---|---|---|---|
+| Camera task core 0, PSRAM 40 MHz | ~1 per 2 s | 8.8 | clean |
+| Camera task **core 1** (`CONFIG_CAMERA_CORE1`) | 39 | 8.7 | no real change; kept |
+| + PSRAM **80 MHz** | 16–23 | 9.0 | ✅ **in use** |
+| + `CONFIG_CAMERA_PSRAM_DMA` | 0 | 7.7 | ❌ garbage band across the bottom of some frames (JPEG 14–35 KB instead of ~8.5 KB). Not used |
+
+The remaining drops are frames the driver discards, never shown. They come from PSRAM contention: the JPEG encoder reads PSRAM while the camera writes it.
+
+**Anti-flicker:** after `set_pll`, `ns_cam_init()` sets the 50/60 Hz band step for the 30 MHz clock: line = 2300 / 30 MHz = 76.7 µs, so 50 Hz = 130 lines (max 6 bands) and 60 Hz = 109 lines (max 7). The driver forces 50 Hz mode. **Recalculate these if the clocks change.**
+
+### E.6 Viewing the camera
+
+The board must be on Wi-Fi. The address is `night-sentinel.local` (mDNS) or the IP from the log (`wifi: got IP ...`), currently 192.168.1.22. The server handles **one request at a time**, so an open `/stream` blocks `/snap.jpg` until it closes.
+
+| What | How | Status |
+|---|---|---|
+| Live view in a browser | `http://night-sentinel.local/` | ✅ |
+| Live view in VLC | Media → Open Network Stream → `http://night-sentinel.local/stream` | ⏳ not tried |
+| One snapshot | `http://night-sentinel.local/snap.jpg` | ✅ |
+| Save N snapshots | `cd tools`, then `uv run grab_snaps.py night-sentinel.local -n 10` → `test-results/day2/` | ✅ |
+| Find the IP without mDNS | `arp -a`, then look for `28-84-85-5c-6c-cc` | ✅ |
+
+The stream is MJPEG (JPEG quality 80 encoded on the chip): about 9 fps and about 8.5 KB per frame. The monitor logs `http: stream: N frames, X fps` every 50 frames. To re-run the 1,000-frame capture test, set `RUN_CAPTURE_TEST 1` in `main/app_main.c`. The test and the stream would compete for frames otherwise.
 
 ---
 
@@ -570,7 +624,8 @@ Quick-lookup table by symptom. The full, dated history of each problem is in [is
 | `ERROR: Component "espressif/camera" not found` | Wrong component name | The driver is **`espressif/esp32-camera`**: `idf.py add-dependency "espressif/esp32-camera"` | ✅ Fixed 2026-10-23 |
 | `multiple definition of 'cam_init'` at link time | The driver's `cam_hal.c` already defines a global `cam_init`. C has one global namespace for functions. | Prefix the project's functions: `ns_cam_init`, `ns_cam_grab`, `ns_cam_release` | ✅ Fixed 2026-10-23 |
 | Own header named `esp_camera.h` | Would hide the driver's header of the same name | Named it `camera.h` instead | ✅ Avoided |
-| Camera only 5.5 FPS at QVGA | Driver's default OV3660 clocks for RGB565 | `set_pll` in `ns_cam_init()`, see [E.5](#e5-camera-clocks-and-frame-rate) | ✅ Fixed (11.1 FPS) |
+| Camera only 5.5 FPS at QVGA | Driver's default OV3660 clocks for RGB565 | `set_pll` to 30/15 MHz in `ns_cam_init()`, see [E.5](#e5-camera-clocks-and-frame-rate) | ✅ Fixed (16.6 FPS) |
+| `cam_hal: FB-SIZE: 138240 != 153600` repeated | Pixel clock too fast (20 MHz): frames arrive short and are silently dropped | Use 30/15 MHz, not 40/20 | ✅ Fixed |
 | `cam_hal: Failed to get frame: timeout` every 4 s | Sensor SYSCLK raised without raising PCLK | Change both together, or remove the `set_pll` call | ✅ Understood |
 | `gpio_get_level()` always reads 0 in a unit test | On the ESP32-S3, an output-only pin can't be read back | Use `GPIO_MODE_INPUT_OUTPUT` or `gpio_dump_io_configuration()` | ⏳ Known in advance; tests not written yet |
 
@@ -639,7 +694,7 @@ Quick-lookup table by symptom. The full, dated history of each problem is in [is
 
 | Command | What it does | Run from | Needs |
 |---|---|---|---|
-| `idf.py -p COM5 monitor` | Watch logs. With the current firmware, expect the frame-rate result about 90 s after boot ([B.3](#b3-open-a-serial-terminal-monitor)). | `D:\Projects\od` | flashed |
+| `idf.py -p COM5 monitor` | Watch logs. With the current firmware, expect `wifi: got IP ...` a few seconds after boot ([B.3](#b3-open-a-serial-terminal-monitor)). | `D:\Projects\od` | flashed |
 
 ### G.8 Debug common issues
 
@@ -693,7 +748,7 @@ From a clean Windows machine to the project firmware running on the board. ⏳ m
     ```powershell
     idf.py -p COM5 flash monitor
     ```
-    Expect `camera init OK`, then after about 90 s the frame-rate line (`... 0 failures, 11 fps ...`). ✅
+    Expect `camera init OK`, then `wifi: got IP ...` and `http: debug server on port 80`. Open `http://<IP>/` in a browser. ⏳
 11. **(Optional) Python tools:** in a separate, non-IDF terminal:
     ```powershell
     cd D:\Projects\od\tools

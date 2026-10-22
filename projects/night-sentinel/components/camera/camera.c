@@ -1,4 +1,4 @@
-#include "esp_log.h"
+﻿#include "esp_log.h"
 #include "board_pins.h"
 #include "camera.h"
 
@@ -57,12 +57,28 @@ esp_err_t ns_cam_init(void)
     sensor_t *s = esp_camera_sensor_get();
     s->set_vflip(s, 1);
 
-    // The driver's QVGA RGB565 clocks (SYSCLK 20 MHz, PCLK 10 MHz) give a 180 ms frame
-    // (2300 x 783 cycles), i.e. ~5.5 fps. Doubling both gives ~11 fps with 0 NULL frames.
-    // Doubling SYSCLK alone starves PCLK and no frames arrive at all.
+    // Raise SYSCLK/PCLK from the driver's 20/10 MHz to 30/15 MHz. A QVGA frame is
+    // 2300 x 783 cycles, so this gives 16.6 fps (default: 5.5 fps). Measured 2026-10-23,
+    // 1000 frames each, counting the driver's "FB-SIZE" short-frame drops:
+    //   20/10 MHz:  5.5 fps, 0 short    30/15 MHz: 16.6 fps, 0 short
+    //   40/20 MHz: 11.1 fps, ~every other frame short (dropped)
+    //   40/10 MHz: no frames at all (PCLK can't keep up with SYSCLK)
     // Args: bypass, multiplier, sys_div, root_2x, pre_div, seld5, pclk_manual, pclk_div
-    s->set_pll(s, 0, 8, 1, 0, 0, 0, 1, 4);
+    s->set_pll(s, 0, 12, 1, 0, 0, 2, 1, 4);
 
+    // Anti-flicker. Mains lights pulse at 100 Hz (50 Hz mains), so exposure must be a
+    // whole number of 10 ms "bands". The sensor counts bands in lines, and the driver's
+    // values (98 lines) assume its own clock. At 30 MHz a line is 2300 / 30 MHz = 76.7 us:
+    //   50 Hz: 10 ms   / 76.7 us = 130 lines, 783 / 130 = 6 bands per frame
+    //   60 Hz: 8.33 ms / 76.7 us = 109 lines, 783 / 109 = 7 bands per frame
+    // Wrong values give rolling horizontal bands and flicker. The driver already forces
+    // 50 Hz mode (0x3c00/0x3c01). Change these if the clocks above change.
+    s->set_reg(s, 0x3a08, 0xff, 130 >> 8);    // 50 Hz band step, high byte
+    s->set_reg(s, 0x3a09, 0xff, 130 & 0xff);  // 50 Hz band step, low byte
+    s->set_reg(s, 0x3a0e, 0xff, 6);           // 50 Hz max bands per frame
+    s->set_reg(s, 0x3a0a, 0xff, 109 >> 8);    // 60 Hz band step, high byte
+    s->set_reg(s, 0x3a0b, 0xff, 109 & 0xff);  // 60 Hz band step, low byte
+    s->set_reg(s, 0x3a0d, 0xff, 7);           // 60 Hz max bands per frame
 
     ESP_LOGI(TAG, "camera ready (sensor PID 0x%x)", s->id.PID);
     return ESP_OK;

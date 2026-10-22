@@ -1,0 +1,15 @@
+menu "Night Sentinel Wi-Fi"
+
+    config NS_WIFI_SSID
+        string "Wi-Fi SSID"
+        default ""
+        help
+            Name of the 2.4 GHz network to join. The board can't see 5 GHz networks.
+
+    config NS_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+        help
+            Stored in sdkconfig, which is git-ignored, so it never reaches GitHub.
+
+endmenu

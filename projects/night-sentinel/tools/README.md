@@ -40,3 +40,17 @@ uv run detect.py
 | `-sh, --show` | Show output window | `True` |
 
 During video/webcam playback, press `q` or `Ctrl+C` to exit.
+
+## grab_snaps.py
+
+Saves JPEG snapshots from the board's debug web server (`http://<board-ip>/snap.jpg`). It uses only the Python standard library. The board's IP is printed in the serial log as `wifi: got IP ...`.
+
+```bash
+# 10 snapshots, 1 s apart, into <repo>/test-results/day2/ (the default)
+uv run grab_snaps.py 192.168.1.22
+
+# 40 snapshots, 2 s apart, into another folder
+uv run grab_snaps.py 192.168.1.22 -n 40 -t 2 -o ../test-results/day3
+```
+
+While a `/stream` viewer (browser or VLC) is open, the board can't serve `/snap.jpg`, so close the viewer first.

@@ -9,5 +9,14 @@ CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_SPIRAM=y
 CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_USE_MALLOC=y
+# PSRAM 80 MHz (default 40): fewer camera FB-SIZE drops while streaming (2026-10-23)
+CONFIG_SPIRAM_SPEED_80M=y
 
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# Custom partition table: 6 MB factory app (Wi-Fi + HTTP already need ~1 MB; esp-dl ~2.7 MB)
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Camera DMA-copy task on core 1, away from Wi-Fi (core 0). Measured: no change in FB-SIZE drops (2026-10-23)
+CONFIG_CAMERA_CORE1=y
