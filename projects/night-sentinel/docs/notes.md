@@ -7,7 +7,7 @@ ESP-IDF: v6.1 (plan says v5.4.x) - confirmed OK: esp-dl pedestrian_detect exampl
   bundled image -> 3 boxes, scores 0.884 / 0.879 / 0.786, inference ~130 ms (2026-10-04)
 Flash QIO @ 80 MHz also works (esp-dl example enabled it); our project still uses DIO
 Port: COM5 (built-in USB Serial/JTAG)
-IR: 47/IR
 Status LED: GPIO3, active-high
 IR LED: GPIO47 → SY7200A EN, active-high
 ESP-IDF: https://github.com/espressif/esp-idf/tree/v6.1
+11.1 fps at QVGA RGB565 with SYSCLK 40 MHz / PCLK 20 MHz, 0 NULL frames, PSRAM stable. Default clocks give 5.5 fps.

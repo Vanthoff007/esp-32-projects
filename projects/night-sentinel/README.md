@@ -14,3 +14,4 @@ Night-time person alert running entirely on the DFRobot DFR1154 (ESP32-S3 AI Cam
 
 - ESP-IDF v6.1 (installed with EIM), target `esp32s3`
 - Board flashes over the built-in USB Serial/JTAG port
+- Setup, build, flash and serial commands: [docs/ESP32_SETUP_AND_COMMANDS.md](docs/ESP32_SETUP_AND_COMMANDS.md)
