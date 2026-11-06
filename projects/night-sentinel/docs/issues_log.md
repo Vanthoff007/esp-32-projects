@@ -24,6 +24,12 @@ Related: setup and commands in [ESP32_SETUP_AND_COMMANDS.md](ESP32_SETUP_AND_COM
 
 ## 2026-11-06
 
+### First Wi-Fi connect after flashing times out (reason 2)
+- **Symptom:** on the first boot after a flash, the station connect failed with disconnect reason 2 (`WIFI_REASON_AUTH_EXPIRE`). The automatic retry 30 s later connected normally.
+- **Cause (likely):** the router dropped or never answered the first auth exchange. This is common right after a reset while the AP still holds the old association. Not seen on later boots.
+- **Fix:** none needed; the retry loop recovers. If it keeps happening, shorten the first retry delay (e.g. 2 s, then back off to 30 s) so boot-to-online is faster.
+- **Status:** 🟡 open, low priority; not blocking
+
 ### Night mode always on would slow the camera in daylight too
 - **Symptom:** with `set_aec2(s, 1)` in `ns_cam_init()`, `/status` in 18 lux room light showed exposure 180.4 ms at gain 3.4×, steady for 30 s. That's ~5.5 fps instead of ~16.
 - **Cause:** with night mode on, the sensor's auto-exposure uses the stretched frames in place of gain and keeps them while the picture looks right. When AEC2 was switched on live in the same light earlier, it stayed at 59.8 ms, so it depends on the starting state.
