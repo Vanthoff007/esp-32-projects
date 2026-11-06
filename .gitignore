@@ -1,0 +1,19 @@
+# Rules shared by every project. Project-specific rules live in each
+# project's own .gitignore (e.g. projects/night-sentinel/.gitignore).
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# ESP-IDF build output and local config (sdkconfig can hold Wi-Fi passwords)
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+
+# Python
+__pycache__/
+*.py[oc]
+.venv/
