@@ -1,15 +1,31 @@
 menu "Night Sentinel Wi-Fi"
 
     config NS_WIFI_SSID
-        string "Wi-Fi SSID"
+        string "Wi-Fi SSID (optional fallback)"
         default ""
         help
-            Name of the 2.4 GHz network to join. The board can't see 5 GHz networks.
+            Network to try when nothing has been saved from the setup page yet.
+            Leave empty to always start in setup mode on first boot.
+            The board can't see 5 GHz networks.
 
     config NS_WIFI_PASSWORD
-        string "Wi-Fi password"
+        string "Wi-Fi password (optional fallback)"
         default ""
         help
             Stored in sdkconfig, which is git-ignored, so it never reaches GitHub.
+
+    config NS_PORTAL_SSID
+        string "Setup hotspot name"
+        default "NightSentinel-Setup"
+        help
+            Hotspot the board opens when it can't join a network. Join it from a phone and
+            open http://192.168.4.1/ to pick a nearby network and type its password.
+
+    config NS_PORTAL_PASSWORD
+        string "Setup hotspot password"
+        default "sentinel123"
+        help
+            8+ characters for WPA2. Shorter (or empty) makes the hotspot open, so anyone
+            nearby could see the home password you type into the page.
 
 endmenu

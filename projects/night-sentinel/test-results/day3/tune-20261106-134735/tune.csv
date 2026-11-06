@@ -1,0 +1,11 @@
+step,changes,ir,als_lux,luma,gain,exposure_ms,exposure_lines,gainceiling,gain_ctrl,exposure_ctrl,aec2,ae_level,brightness,contrast,special_effect
+baseline,{},1,7.7,140.1,13.25,59.8,780,15,1,1,0,0,0,0,0
+ceiling_16x,"{""gainceiling"": 16}",1,13.2,134.9,11.25,59.8,780,16,1,1,0,0,0,0,0
+ceiling_32x,"{""gainceiling"": 32}",1,10.2,130.9,13.25,59.8,780,32,1,1,0,0,0,0,0
+ceiling_63x,"{""gainceiling"": 63}",1,14.5,140.5,12.25,59.8,780,63,1,1,0,0,0,0,0
+aec2_on,"{""aec2"": 1}",1,13.7,136.2,11.25,59.8,780,15,1,1,1,0,0,0,0
+ae_level_+1,"{""ae_level"": 1}",1,8.3,127.6,15.0,59.8,780,15,1,1,0,1,0,0,0
+ae_level_+2,"{""ae_level"": 2}",1,13.5,153.0,15.0,59.8,780,15,1,1,0,2,0,0,0
+brightness_+1,"{""brightness"": 1}",1,13.3,152.8,12.0,59.8,780,15,1,1,0,0,1,0,0
+grey,"{""special_effect"": 2}",1,13.3,137.2,12.0,59.8,780,15,1,1,0,0,0,0,2
+combo,"{""gainceiling"": 32, ""aec2"": 1, ""ae_level"": 1, ""brightness"": 1}",1,13.5,161.7,4.44,180.4,2352,32,1,1,1,1,1,0,0

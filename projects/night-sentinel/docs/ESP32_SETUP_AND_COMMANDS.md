@@ -1,842 +1,607 @@
 # ESP32 setup and command handbook
 
-How the night-sentinel development environment was set up, and the commands used to build, flash and talk to the board. Everything here was rebuilt from the project files, the working machine, and the records of earlier work sessions (2026-10-03 and 2026-10-04). It was last checked on 2026-10-23.
+How to set up, build, flash, run and debug the night-sentinel firmware on the DFRobot DFR1154, in the order you'd do it. Last checked 2026-11-06 on the machine and board described below.
 
-Related docs:
-- [notes.md](notes.md): board facts (chip, flash, PSRAM, pins).
-- [issues_log.md](issues_log.md): every error and bug hit so far, by date.
-- [../README.md](../README.md): project overview.
-- [../tools/README.md](../tools/README.md): the PC-side Python detector.
-- `docs/next_steps.md`: session handoff and the current day's guide. **This file is local only** because it is in `.gitignore`, so it doesn't exist in a fresh clone.
+Related docs: [notes.md](notes.md) (board facts) · [issues_log.md](issues_log.md) (every problem hit, by date, with full measurements) · [../tools/README.md](../tools/README.md) (PC-side Python tools) · `docs/next_steps.md` (session handoff; **local only**, git-ignored).
 
-## Status labels
+**Status labels:** ✅ verified on this setup · ⏳ not verified (documented or suggested, never run here) · 🔥 overwrites or erases the board.
 
-| Label | Meaning |
-|---|---|
-| ✅ **Verified** | Run on this machine or board, and the output was checked. |
-| ⚠️ **Hit an error** | Attempted, failed, and the fix is recorded. |
-| ⏳ **Not verified** | Suggested or documented, but never run on this setup. Treat it as untested. |
-| 🔥 **Destructive** | Overwrites or erases what's on the board. |
+Commands are **PowerShell**. "IDF terminal" means a PowerShell with ESP-IDF loaded ([step 1.4](#14-open-an-esp-idf-terminal)). Replace `COM5` with your port ([step 2.1](#21-find-the-serial-port)).
 
 ---
 
-## A. Hardware and environment
+## 1. Prerequisites and environment setup
 
-### Board
-
-| Item | Value | Source | Status |
-|---|---|---|---|
-| Board | DFRobot **DFR1154** "ESP32-S3 AI Camera Module", hardware **v1.1** | `resources/`, README, user | ✅ |
-| SoC | ESP32-S3, silicon rev **v0.2**, 2 cores, Wi-Fi/BLE | hello_world boot log | ✅ |
-| Flash | **16 MB** Winbond, **DIO** mode, 80 MHz | boot log (`detected chip: winbond`, `flash io: dio`) | ✅ |
-| PSRAM | **8 MB**, **Octal** mode | menuconfig test on hello_world; esp-dl example ran | ✅ |
-| Camera | OV3660 (datasheets in `resources/`), SCCB address `0x3C` | boot log | ✅ captures in firmware; pins in [E.2.2](#e22-camera-ov3660) |
-| Status LED | GPIO3, active-high | firmware test | ✅ |
-| IR LEDs | GPIO47 → `IR_CTL` → EN of SY7200A boost LED driver (U2), active-high | schematic v1.1 + firmware | ✅ (ticked in the project tracker; how the glow was seen wasn't recorded) |
-| Power LED (D8) | Wired to 3.3 V, can't be switched off in code | schematic v1.1 | from schematic |
-| Power inputs | **USB-C** VBUS → diode D9, and 2-pin **P4 "Vin 3.7~15V"** → diode D10, both into the JW3651 3.3 V buck (U12). See [A.1](#a1-powering-the-board) | schematic v1.1 | from schematic |
-
-Datasheets, schematics (v1.0, v1.1) and dimensions are in [`../resources/`](../resources/).
-
-### A.1 Powering the board
-
-From schematic v1.1 (bottom-left block). The two power inputs are **diode-OR'd**:
-
-| Setup | Works? | Notes |
-|---|---|---|
-| USB-C cable to the laptop only | ✅ in use | Power and data (flash, monitor) over one cable |
-| Phone charger (5 V, ≥ 2 A) on USB-C | ✅ expected | Runs on its own: boots, joins Wi-Fi, serves `http://night-sentinel.local/`. No serial log or flashing. The status LED turns on when it's online |
-| **5–12 V on VIN (P4) + USB-C to the laptop** | ✅ by design, ⏳ not tried | The higher voltage powers the board. Diodes D9/D10 stop the VIN supply from feeding back into the laptop's USB port. Data still goes over USB. Check the P4 connector type in the DFRobot wiki and the polarity (+ / GND) before wiring |
-| Powered USB hub between laptop and board | ✅ expected | Data from the laptop, power from the hub's adapter |
-
-Measured 2026-10-23: lowering Wi-Fi TX power from 20 to 8.5 dBm didn't change the image row noise (2.42 → 2.46), so the laptop USB supply isn't causing image noise. Details in [issues_log.md](issues_log.md).
-
-### Development machine
+### 1.1 Hardware
 
 | Item | Value | Status |
 |---|---|---|
-| OS | Windows 11 Home (10.0.26200) | ✅ |
-| Shell | Windows PowerShell 5.1 (ESP-IDF is loaded into PowerShell) | ✅ |
+| Board | DFRobot **DFR1154** "ESP32-S3 AI Camera Module", hardware **v1.1**. Schematics (v1.0, v1.1), datasheets and dimensions in [`../resources/`](../resources/) | ✅ |
+| SoC | ESP32-S3, silicon rev **v0.2**, 2 cores, 240 MHz, Wi-Fi/BLE | ✅ boot log |
+| Flash | **16 MB** Winbond, **DIO**, 80 MHz | ✅ boot log |
+| PSRAM | **8 MB octal**, run at **80 MHz** | ✅ boot log |
+| Camera | OV3660, SCCB address `0x3C` | ✅ |
+| USB | One USB-C cable to the chip's **built-in USB Serial/JTAG**. No USB-UART chip, **no driver needed** on Windows | ✅ |
+| Cable | Must carry data: charge-only USB-C cables power the board but no COM port appears | ✅ |
+
+**Power** (schematic v1.1): USB-C VBUS → diode D9, and the 2-pin connector **P4 "Vin 3.7~15V"** → diode D10, both into the JW3651 3.3 V regulator (U12). The inputs are diode-OR'd, so the higher voltage powers the board and neither feeds back into the other.
+
+| Power setup | Status |
+|---|---|
+| USB-C to the laptop only: power + data | ✅ in use |
+| Phone charger (5 V, ≥ 2 A) on USB-C: runs standalone over Wi-Fi, no serial log or flashing | ✅ by design |
+| **5–12 V on VIN (P4) + USB-C to the laptop**: adapter powers the board, USB still carries data. Check P4's connector type (DFRobot wiki) and polarity before wiring | ⏳ not tried |
+| Powered USB hub between laptop and board | ⏳ not tried |
+| Power consumption | ⏳ **not measured** (needs a USB-C power meter: Wi-Fi idle, streaming, streaming + IR) |
+
+### 1.2 Development machine and tools
+
+| Item | Value | Status |
+|---|---|---|
+| OS / shell | Windows 11 Home (10.0.26200), Windows PowerShell 5.1 | ✅ |
 | Editor | VS Code + **ESP-IDF extension** (`espressif.esp-idf-extension` 2.3.0) | ✅ |
 | Git | `C:\Program Files\Git\cmd\git.exe` | ✅ |
-| System Python | 3.14 at `C:\Python314\python.exe` (not used by ESP-IDF) | ✅ |
-| uv | `C:\Users\18arj\.local\bin\uv.exe` (only for `tools/`) | ✅ |
+| uv (only for `tools/`) | `C:\Users\18arj\.local\bin\uv.exe`. How it was installed wasn't recorded | ✅ ⏳ |
+| System Python | 3.14 at `C:\Python314\python.exe`, **not used by ESP-IDF** | ✅ |
+| Not used | **Arduino IDE / Arduino-ESP32** (deliberately not installed: a second toolchain risks the wrong `esptool` or port; DFRobot's `.ino` sketches are only read for pin numbers), PlatformIO | — |
 
-### USB connection
+### 1.3 Install ESP-IDF v6.1
 
-- The board connects with **one USB-C cable** to the ESP32-S3's **built-in USB Serial/JTAG** port. There is no separate USB-UART chip.
-- Windows shows it as **"USB Serial Device (COM5)"** under Device Manager → Ports. ✅
-- **No driver was installed.** Windows' built-in USB serial driver handled it. ✅
-- COM3 and COM4 on this PC are **"Standard Serial over Bluetooth link"** ports. They are not the board, so ignore them.
+1. Run the **Espressif Installation Manager GUI** (`eim-gui-windows-x64-v0.19.0.exe`, kept in `C:\Users\18arj\.espressif\eim_gui\`) and install ESP-IDF **v6.1** for target **esp32s3**, with a short path without spaces. ✅ The exact GUI options weren't recorded ⏳. Check the result matches this table (from `C:\Espressif\tools\eim_idf.json`):
 
-### Tools and frameworks
+   | What | Path / version |
+   |---|---|
+   | ESP-IDF (`IDF_PATH`) | `C:\esp\v6.1\esp-idf` |
+   | Tools (`IDF_TOOLS_PATH`) | `C:\Espressif\tools` |
+   | ESP-IDF Python venv | `C:\Espressif\tools\python\v6.1\venv` (Python 3.14.5) |
+   | **Activation script** | `C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1` |
+   | esptool / CMake / Ninja | v5.3.1 / 4.0.3 / 1.12.1 |
+   | Compiler | `xtensa-esp32s3-elf-gcc` 15.2.0 (`esp-15.2.0_20251204`) |
+   | OpenOCD | `v0.12.0-esp32-20260703` (installed, not used) |
 
-| Tool | Used? |
+   > The original build plan named v5.4.x. v6.1 was kept after esp-dl's `pedestrian_detect` example ran correctly on it ([Appendix C](#appendix-c-other-firmware-flashed-to-this-board)).
+
+2. Fix ESP-IDF's "not configured to handle Unicode characters" warning once, then restart VS Code and all terminals: ✅
+
+   ```powershell
+   setx PYTHONUTF8 1
+   ```
+
+### 1.4 Open an ESP-IDF terminal
+
+ESP-IDF's variables (`IDF_PATH`, `PATH` additions, its Python venv) exist **only in a terminal that loads the activation script**. Nothing is set globally. Use one of:
+
+- **Any PowerShell** ✅ (used for every build). The leading `. ` loads the script into the current shell:
+
+  ```powershell
+  . "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"
+  idf.py --version                    # ESP-IDF v6.1
+  python -m esptool version           # v5.3.1
+  xtensa-esp32s3-elf-gcc --version    # 15.2.0
+  ```
+
+- **VS Code ESP-IDF extension** ✅
+  1. Open the project folder `D:\Projects\od` itself, since the extension acts on the open folder (a parent folder gives `CMakeLists.txt not found`).
+  2. When asked for a setup, pick the existing **v6.1** at `C:\esp\v6.1\esp-idf`; don't download a second copy. (This writes `.vscode/settings.json`, which is git-ignored.)
+  3. `Ctrl+Shift+P` → **ESP-IDF: Set Espressif Device Target** → **esp32s3** → **ESP32-S3 chip (via builtin USB-JTAG)**.
+  4. `Ctrl+Shift+P` → **ESP-IDF: Open ESP-IDF Terminal**.
+
+- **Dedicated VS Code terminal profile** ⏳ (suggested, not set up). Add to the user `settings.json`:
+
+  ```json
+  "terminal.integrated.profiles.windows": {
+    "ESP-IDF v6.1": {
+      "path": "powershell.exe",
+      "args": ["-NoExit", "-ExecutionPolicy", "Bypass",
+               "-Command", ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'"]
+    }
+  }
+  ```
+
+**Problems at this step**
+
+| Symptom | Fix | Status |
+|---|---|---|
+| `idf.py`, `cmake`, `ninja`, compiler "not found" | Finish the EIM install, then load the activation script | ✅ |
+| `sdkconfig ... generated for target 'esp32s3', but environment variable IDF_TARGET is set to 'esp32'` | The extension passed its default target. Set the target as in step 3 above and open a new terminal; for one terminal: `$env:IDF_TARGET = "esp32s3"`. **Don't** run `idf.py set-target esp32` | ✅ |
+| `(od)` in the ESP-IDF prompt | VS Code auto-activated the `tools/` venv. **Keep ESP-IDF and `tools/` in separate terminals.** To stop it per folder: `"python.terminal.activateEnvironment": false` in `.vscode/settings.json` ⏳ | ✅ |
+| Unicode warning persists | `setx` only affects new processes: restart VS Code completely. Per terminal: `chcp 65001` | ✅ |
+
+On a new machine or board, optionally confirm the toolchain with ESP-IDF's `hello_world` before building the project ([Appendix C](#appendix-c-other-firmware-flashed-to-this-board)). It needs the COM port from [step 2.1](#21-find-the-serial-port).
+
+### 1.5 Get the project
+
+```powershell
+git clone https://github.com/Vanthoff007/od.git D:\Projects\od   # ⏳ not re-run: the repo already existed here
+```
+
+| Path | Contents |
 |---|---|
-| ESP-IDF v6.1 (installed with EIM) | ✅ Yes, the only firmware framework |
-| ESP-IDF VS Code extension | ✅ Yes, for the terminal and target selection |
-| esp-dl / `pedestrian_detect` | ✅ The example ran on its own; not in the project yet |
-| esp32-camera | ✅ 2.1.8, added 2026-10-23. `components/camera/` uses it and captures on the board. See [E.5](#e5-camera-clocks-and-frame-rate). |
-| Arduino IDE / Arduino-ESP32 | ❌ **Deliberately not installed.** DFRobot's `.ino` sketches are read only as pin references. Installing both toolchains risks running the wrong `esptool` or using the wrong port. |
-| PlatformIO | ❌ Not used |
+| `CMakeLists.txt` | ESP-IDF project root, `project(night-sentinel)` |
+| `main/` | `app_main.c`; `idf_component.yml` (depends on `espressif/esp32-camera`) |
+| `components/board/` | `board_pins.h` (**every GPIO**), `status_led.c`, `ir.c` (`ir_set`, `ir_get`) |
+| `components/camera/` | `ns_cam_init / ns_cam_grab / ns_cam_release`; `ns_cam_mean_luma` (frame brightness), `ns_cam_read_ae` (live gain/exposure), `ns_cam_set_gain_ceiling`, `ns_cam_scan_bus` (I2C scan + LTR-308 check) |
+| `components/net/` | Wi-Fi (`ns_wifi_connect`: saved network, else setup hotspot), setup page (`wifi_portal.c`), mDNS (`ns_mdns_start`); menu in its `Kconfig`; `idf_component.yml` (depends on `espressif/mdns`) |
+| `components/debug_http/` | Debug web server: port 80 `/`, `/snap.jpg`, `/control`, `/status`; port 81 `/stream` |
+| `sdkconfig.defaults`, `partitions.csv` | Committed board configuration ([step 3.1](#31-configure)) |
+| `dependencies.lock` | Resolved component versions (committed) |
+| `tools/` | PC-side Python: `detect.py`, `grab_snaps.py`, `capture_set.py` (Day 3) |
+| `test-results/` | Saved snapshots, Day 3 tuning sweeps and light logs |
+| `testdata/` | Labelled day/night test images for Day 4 (`capture_set.py snap`), each set with an `index.csv` |
+| git-ignored | `build/`, `sdkconfig`, `sdkconfig.old`, `managed_components/`, `.vscode/`, `docs/next_steps.md` |
+
+### 1.6 Python tools (optional, separate terminal)
+
+In a **normal** (non-IDF) terminal. Needs uv and Python ≥ 3.14:
+
+```powershell
+cd D:\Projects\od\tools
+uv sync                     # creates tools\.venv from uv.lock
+uv run detect.py --help     # ✅ 2026-10-03 (ultralytics 8.4.143)
+```
+
+`uv run` needs no activation. To activate by hand: `.\tools\.venv\Scripts\Activate.ps1` (if blocked: `Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned`), and `deactivate` to leave.
 
 ---
 
-## B. Accessing the ESP32 terminal
+## 2. Connect to the ESP32
 
-All commands are PowerShell, run in an **ESP-IDF terminal** (see [C.3](#c3-opening-an-esp-idf-terminal)) unless stated otherwise.
+### 2.1 Find the serial port
 
-### B.1 Find the board's serial port
+On Windows the board is a `COMx` port. Linux names (`/dev/ttyACM0`, `/dev/ttyUSB0`) and the `dialout` group don't apply. Plug the board in, then in any PowerShell:
 
-**On Windows, the port is `COMx`.** Linux-style names like `/dev/ttyUSB0` (USB-UART bridge chips) or `/dev/ttyACM0` (native USB, which this board would use on Linux) **don't apply on this machine.** Everywhere this handbook says `COM5`, use the number you find here.
+```powershell
+[System.IO.Ports.SerialPort]::GetPortNames()
+Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match "\(COM\d+\)" } | Select-Object Name, DeviceID
+```
 
-1. Plug the board in.
-2. List the ports. Either of these works in any PowerShell, no ESP-IDF needed:
+✅ The board is **"USB Serial Device (COM5)"** (USB ID `303A:1001`). On this PC, **COM3 and COM4 are Bluetooth** ports; ignore them. GUI alternative: Device Manager → Ports (COM & LPT), unplug and replug to see which entry changes.
 
-   ```powershell
-   # Just the names
-   [System.IO.Ports.SerialPort]::GetPortNames()
+### 2.2 Open and close the serial monitor
 
-   # Names with a description: look for "USB Serial Device"
-   Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match "\(COM\d+\)" } | Select-Object Name, DeviceID
-   ```
-
-   Expected output with the board plugged in (recorded 2026-10-03):
-
-   ```
-   Standard Serial over Bluetooth link (COM3)
-   Standard Serial over Bluetooth link (COM4)
-   USB Serial Device (COM5)
-   ```
-
-   ✅ Both commands verified. On 2026-10-23 the board was unplugged and only COM3/COM4 appeared, which is how you can tell the board's port apart.
-
-3. GUI alternative: **Device Manager → Ports (COM & LPT)**. Unplug and replug the board and see which entry disappears and comes back.
-
-### B.2 Check USB connectivity and permissions
-
-- **Windows has no `dialout` group or `/dev` permissions.** The Linux step `sudo usermod -aG dialout $USER` doesn't apply.
-- If no new COM port appears when you plug in:
-  - Try another USB-C cable. Charge-only cables are common. ⏳ suggestion
-  - Try another USB port on the PC. ⏳ suggestion
-- If the port appears but can't be opened, another program has it open. See [B.5](#b5-troubleshooting-connections).
-
-### B.3 Open a serial terminal (monitor)
+From the project folder, so crash addresses are decoded with `build\night-sentinel.elf`:
 
 ```powershell
 cd D:\Projects\od
 idf.py -p COM5 monitor
 ```
 
-- **What it does:** opens ESP-IDF's serial monitor. It decodes crash addresses into source file and line using `build\night-sentinel.elf`, which is why you run it from the project folder.
-- **Settings:** 115 200 baud (`CONFIG_ESPTOOLPY_MONITOR_BAUD=115200` in `sdkconfig`), 8N1. On the USB Serial/JTAG port the baud rate doesn't actually limit speed.
-- Usually combined with flashing: `idf.py -p COM5 flash monitor` ✅ (this is the form that was actually used).
+- Exit: **`Ctrl+]`** ✅. Reset the board: `Ctrl+T` then `Ctrl+R` ⏳. All shortcuts: `Ctrl+T` then `Ctrl+H` ⏳.
+- 115 200 baud (`CONFIG_ESPTOOLPY_MONITOR_BAUD`); on USB Serial/JTAG this doesn't limit speed.
+- **Only one program can hold COM5.** Close every monitor (`Ctrl+]` in each window) before flashing from another terminal.
 
-Expected output with the current project firmware (`main/app_main.c`: camera, Wi-Fi, debug web server). ✅ verified 2026-10-23:
+**Problems at this step**
+
+| Symptom | Fix | Status |
+|---|---|---|
+| No board in the port list (only COM3/COM4) | Board not connected or cable data-less: reconnect, try another cable or USB port; Device Manager still lists it as "Unknown" when disconnected | ✅ 2026-10-23 |
+| `could not open port 'COM5'` / `PermissionError(13, 'Access is denied.')` | Another monitor (other terminal, VS Code) holds the port; close it | ✅ 2026-10-23 |
+| Port number changed | Different USB port can mean a different number; repeat [2.1](#21-find-the-serial-port) | ⏳ |
+
+---
+
+## 3. Build and flash
+
+Run in an IDF terminal from `D:\Projects\od`.
+
+### 3.1 Configure
+
+1. **First time in a fresh clone** ✅: creates `sdkconfig` from `sdkconfig.defaults`.
+
+   ```powershell
+   idf.py set-target esp32s3
+   ```
+
+   ⚠️ `set-target` runs `fullclean` and regenerates `sdkconfig`, so any setting not in `sdkconfig.defaults` is lost, including the optional fallback Wi-Fi in menuconfig (step 3). A login saved from the setup page lives in NVS (flash), so it survives this.
+
+2. **Board settings** live in `sdkconfig.defaults` (committed) ✅:
+
+   | Setting | Value | Why |
+   |---|---|---|
+   | `CONFIG_IDF_TARGET` | `"esp32s3"` | |
+   | `CONFIG_ESPTOOLPY_FLASHMODE_DIO`, `..._FLASHSIZE_16MB` | `y` | 16 MB Winbond, DIO |
+   | `CONFIG_SPIRAM`, `..._MODE_OCT`, `..._USE_MALLOC` | `y` | 8 MB octal PSRAM (quad mode is wrong for this board) |
+   | `CONFIG_SPIRAM_SPEED_80M` | `y` | Default 40 MHz; 80 MHz halves camera frame drops while streaming |
+   | `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240` | `y` | |
+   | `CONFIG_PARTITION_TABLE_CUSTOM`, `..._CUSTOM_FILENAME` | `y`, `"partitions.csv"` | The default 1 MB app slot is too small |
+   | `CONFIG_CAMERA_CORE1` | `y` | Camera copy task on core 1, away from Wi-Fi (core 0); measured no change in frame drops |
+
+   `partitions.csv`: `nvs` 0x9000 24 KB · `phy_init` 0xf000 4 KB · `factory` 0x10000 **6 MB**.
+
+   Do **not** enable `CONFIG_CAMERA_PSRAM_DMA`: it stopped the drops but let corrupted frames through ([issues log](issues_log.md)).
+
+3. **Wi-Fi**: nothing needs to be set at build time. On first boot, or whenever it can't join its network, the board opens a setup hotspot and you choose a network from your phone ([4.2](#42-connect-to-wi-fi-setup-page)).
+
+   Optional, in **`idf.py menuconfig` → Component config → Night Sentinel Wi-Fi** (`S` to save, `Esc` to exit):
+
+   | Option | Default | Use |
+   |---|---|---|
+   | Wi-Fi SSID / password (optional fallback) | empty | Tried only while nothing has been saved from the setup page. ✅ `Airtel_Connect` set here |
+   | Setup hotspot name | `NightSentinel-Setup` | |
+   | Setup hotspot password | `sentinel123` | 8+ characters for WPA2. Shorter makes the hotspot open, so anyone nearby could see the password you type |
+
+   These go into `sdkconfig`, which is git-ignored, so they never reach GitHub. Any other menuconfig change the project depends on must also be copied into `sdkconfig.defaults`.
+
+4. **Component dependencies** come from the component manager. Versions resolved in `dependencies.lock` ✅:
+
+   | Component | Version | Declared in |
+   |---|---|---|
+   | `espressif/esp32-camera` | 2.1.8 | `main/idf_component.yml` |
+   | `espressif/esp_jpeg` | 1.3.1 | pulled in by esp32-camera |
+   | `espressif/mdns` | 1.14.0 | `components/net/idf_component.yml` |
+
+   They download into `managed_components/` on the next build. To add one: `idf.py add-dependency "<namespace>/<name>"` (or `--component <name>` to add it to that component), then `idf.py reconfigure`. The camera driver is **`espressif/esp32-camera`**; `espressif/camera` doesn't exist.
+
+### 3.2 Build
+
+```powershell
+idf.py build
+idf.py size        # memory summary
+```
+
+✅ 2026-11-06: ends with `Project build complete`.
+
+| Measure | Value |
+|---|---|
+| App binary | 0xf7100 bytes (≈ 988 KB), 84 % of the 6 MB slot free (2026-11-06) |
+| Internal RAM (DIRAM), static | 135 342 / 341 760 bytes (39.6 %); Wi-Fi and the camera also allocate at runtime |
+| IRAM | 16 384 / 16 384 bytes. That's a small fixed block; 100 % is normal |
+
+**Problems at this step**
+
+| Symptom | Fix | Status |
+|---|---|---|
+| App grew only ~14 KB after adding Wi-Fi; board logs `no SSID` | Old firmware (before 2026-11-06): with an empty SSID the compiler removed all Wi-Fi code. Current firmware always builds Wi-Fi and falls back to the setup page | ✅ |
+| `error: '%s' directive output may be truncated` (`-Werror=format-truncation`) | The `snprintf` buffer can't hold the longest possible result. Make the buffer bigger | ✅ 2026-11-06 |
+| `unexpected EOF while looking for matching` in Git Bash | Shell quoting broke on a long command with mixed quotes; nothing ran. Edit files in the editor instead | ✅ 2026-11-06 |
+| `multiple definition of 'cam_init'` | The camera driver already defines `cam_init`. Project functions use the `ns_` prefix; don't name a header `esp_camera.h` either | ✅ |
+| `ninja: error: opening deps log: Permission denied` | A previous `idf.py` was killed mid-build and left `ninja.exe` running. Stop it (Task Manager or `Stop-Process -Name ninja`), then rebuild | ✅ |
+| Stale configuration after changing Kconfig or dependencies | `idf.py reconfigure`; last resort `idf.py fullclean` | ⏳ |
+| An edit "didn't work" | File not saved in VS Code (dot on the tab): `Ctrl+S`; check with `git status --short` | ✅ |
+
+### 3.3 Flash 🔥
+
+```powershell
+idf.py -p COM5 flash monitor     # or "flash" alone, without the monitor
+```
+
+✅ Builds if needed, writes at 460 800 baud (`--flash-mode dio --flash-size 16MB --flash-freq 80m`), resets the board automatically, then opens the monitor. Success shows `Hash of data verified.` per image.
+
+| Offset | Image |
+|---|---|
+| `0x0` | `build\bootloader\bootloader.bin` |
+| `0x8000` | `build\partition_table\partition-table.bin` |
+| `0x10000` | `build\night-sentinel.bin` |
+
+**Problems at this step**
+
+| Symptom | Fix | Status |
+|---|---|---|
+| `Could not open COM5, the port is busy or doesn't exist` | A monitor holds the port, or the board isn't connected ([2.2](#22-open-and-close-the-serial-monitor)) | ✅ |
+| `Failed to connect to ESP32-S3` | Manual download mode: **hold BOOT, tap RST, release BOOT**, flash again | ⏳ never needed |
+
+Also available, never run ⏳: erase the whole flash including NVS (Wi-Fi calibration data **and the Wi-Fi login saved from the setup page**), `idf.py -p COM5 erase-flash` 🔥 (not needed normally, since `flash` overwrites what it needs and keeps NVS); flash without idf.py, `python -m esptool --chip esp32s3 -b 460800 --before default-reset --after hard-reset write-flash "@flash_args"` (from `build\`); read the flash ID, `python -m esptool --chip esp32s3 -p COM5 flash-id`.
+
+---
+
+## 4. Run and debug
+
+### 4.1 Check the boot log
+
+Current firmware (`main/app_main.c`): status LED + IR init → NVS → camera → I2C bus scan → Wi-Fi (or setup hotspot) → mDNS → debug web server → light log every 5 s. Expected log (✅ up to the I2C scan and the setup-mode lines, 2026-11-06; the online part ✅ 2026-10-23 with the older firmware, and its `http:` / `light:` lines are taken from the current code):
 
 ```
+I (...) boot:  2 factory          factory app      00 00 00010000 00600000
+I (...) esp_psram: Found 8MB PSRAM device
+I (...) esp_psram: Speed: 80MHz
+I (...) esp_psram: SPI SRAM memory test OK
+I (...) camera: Detected OV3660 camera
 I (...) ov3660: Calculated VCO: 240000000 Hz, PLLCLK: 120000000 Hz, SYSCLK: 30000000 Hz, PCLK: 15000000 Hz
 I (...) camera: camera ready (sensor PID 0x3660)
 I (...) main: camera init OK
-I (...) wifi: connecting to "<your SSID>"
-I (...) wifi: got IP 192.168.x.x
+I (...) camera: I2C scan: device at 0x3c (OV3660 camera)
+I (...) camera: I2C scan: device at 0x53 (LTR-308 light sensor?)
+I (...) camera: I2C scan: 2 device(s) on GPIO 8/9
+I (...) camera: LTR-308 part ID 0xb1 (datasheet says 0xB1)
+I (...) wifi: connecting to "<saved network>"
+I (...) wifi: got IP 192.168.1.22
 I (...) main: wifi OK
 I (...) mdns: open http://night-sentinel.local/
-I (...) http: debug server on port 80: /, /stream, /snap.jpg
+I (...) http: debug server: port 80 /, /snap.jpg, /control, /status; port 81 /stream
+I (...) main: light: luma 92.4, gain 1.94x, exposure 59.9 ms, IR off      ← every 5 s
 ```
 
-With an empty SSID it logs `E wifi: no SSID: set it in idf.py menuconfig -> Night Sentinel Wi-Fi` instead. To re-run the 1,000-frame capture test, set `RUN_CAPTURE_TEST` to 1 in `app_main.c`.
+If the saved network can't be reached (✅ 2026-11-06):
 
-### B.4 Exit the monitor
+```
+W (...) wifi: disconnected (reason 201), retry 1/3        ← 3 retries, ~10 s
+W (...) wifi: couldn't join "Airtel_Connect": network not found (too far away, or not on 2.4 GHz) (reason 201)
+I (...) esp_netif_lwip: DHCP server started on interface WIFI_AP_DEF with IP: 192.168.4.1
+I (...) portal: scan found 4 networks
+W (...) wifi: SETUP MODE: join Wi-Fi "NightSentinel-Setup" (password "sentinel123") and open http://192.168.4.1/
+```
 
-Press **`Ctrl+]`**. ✅
+When online, the **status LED (GPIO3) turns on**, which is useful without a serial cable. LED off after boot means setup mode. An earlier `ov3660` line with `SYSCLK: 20000000 Hz` is the driver default, before the project's clock change.
 
-Other monitor keys (⏳ not used so far, from idf.py monitor's built-in help):
-- `Ctrl+T` then `Ctrl+R`: reset the board.
-- `Ctrl+T` then `Ctrl+H`: show all monitor shortcuts.
-
-### B.5 Troubleshooting connections
-
-| Symptom | What to do | Status |
-|---|---|---|
-| No COM port for the board | Different cable or USB port; check Device Manager while replugging. | ✅ happened 2026-10-23 (only COM3/COM4 listed); reconnecting the board brought COM5 back |
-| `could not open port 'COM5'` / access denied | Another program has the port: a second `idf.py monitor`, the VS Code ESP-IDF monitor, or a serial terminal app. Close it and retry. Only one program can use a COM port at a time. | ⏳ never happened |
-| `Failed to connect to ESP32-S3` during flash | Put the chip in download mode by hand: **hold BOOT, tap RST, release BOOT**, then run the flash command again. | ⏳ never needed |
-| Port number changed | Windows can give a different COM number on another USB port. Re-run [B.1](#b1-find-the-boards-serial-port). | ⏳ |
-
----
-
-## C. Development environment setup
-
-### C.1 ESP-IDF v6.1 (via EIM)
-
-**Purpose:** the official Espressif framework, which includes the build system (`idf.py`, CMake, Ninja), the Xtensa compiler, `esptool` for flashing, and the serial monitor.
-
-**How it was installed:** ✅
-1. Downloaded the **Espressif Installation Manager GUI**, `eim-gui-windows-x64-v0.19.0.exe` (saved in `C:\Users\18arj\.espressif\eim_gui\`).
-2. Ran it and installed ESP-IDF. It installed **v6.1**, not the v5.4.x the original build plan named. That was later tested and kept; see [F](#f-troubleshooting-and-lessons-learned).
-
-EIM's choices for this install were not recorded, so the exact options are ⏳. When reinstalling, the build plan's guidance was:
-- Pick the `esp32s3` target. You can choose only that one to save space.
-- Use a short install path with no spaces, like `C:\esp`.
-
-**Where it ended up** (recorded in `C:\Espressif\tools\eim_idf.json`): ✅
-
-| What | Path |
+| Log line | Meaning / fix |
 |---|---|
-| ESP-IDF source (`IDF_PATH`) | `C:\esp\v6.1\esp-idf` |
-| Tools (`IDF_TOOLS_PATH`) | `C:\Espressif\tools` |
-| ESP-IDF's own Python venv | `C:\Espressif\tools\python\v6.1\venv` |
-| **Activation script** | `C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1` |
-| Install record | `C:\Espressif\tools\eim_idf.json` |
+| `W wifi: SETUP MODE: ...` | No saved network reachable: use the setup page ([4.2](#42-connect-to-wi-fi-setup-page)) |
+| `W wifi: disconnected (reason N), retry k/3` | 201 = network not found (out of range, or 5 GHz only), 15 / 202 / 204 = wrong password, 210 / 211 = open/WEP network (refused). After 3 retries the board switches to setup mode |
+| `W wifi: disconnected (reason N), reconnecting` | Lost the network after being online. Retries forever by itself |
+| `W camera: LTR-308 not found at 0x53` | The light sensor didn't answer. Day/night falls back to frame brightness |
+| `cam_hal: FB-SIZE: 138240 != 153600` (no `W`/`E` prefix) | A short frame the driver **silently dropped**. ~16 per minute while streaming is expected; constant drops mean the camera clocks are too fast |
+| `cam_hal: Failed to get frame: timeout` every 4 s | No frames at all: the sensor clocks are inconsistent ([Appendix B](#appendix-b-camera-configuration)) |
+| `E camera init failed` | Check camera pins against [Appendix A](#appendix-a-pins) |
 
-**Tool versions** (checked 2026-10-23 after loading the activation script): ✅
+### 4.2 Connect to Wi-Fi (setup page)
 
-| Tool | Version | Path |
-|---|---|---|
-| ESP-IDF | v6.1 | `C:\esp\v6.1\esp-idf` |
-| Python (IDF venv) | 3.14.5 | `C:\Espressif\tools\python\v6.1\venv\Scripts\python.exe` |
-| esptool | v5.3.1 | inside the IDF venv |
-| CMake | 4.0.3 | `C:\Espressif\tools\cmake\4.0.3\bin\cmake.exe` |
-| Ninja | 1.12.1 | `C:\Espressif\tools\ninja\1.12.1\ninja.exe` |
-| Compiler | `xtensa-esp32s3-elf-gcc` 15.2.0 (`esp-15.2.0_20251204`) | `C:\Espressif\tools\xtensa-esp-elf\esp-15.2.0_20251204\...` |
-| OpenOCD | `v0.12.0-esp32-20260703` | `C:\Espressif\tools\openocd-esp32\...` (installed, not used yet) |
+At boot the board tries the network saved from the setup page, or, if none has been saved, the menuconfig fallback. If that fails, it switches to setup mode:
 
-**Verify:**
+1. On your phone, join Wi-Fi **`NightSentinel-Setup`**, password **`sentinel123`**. If the phone warns "no internet", choose to stay connected; turning off mobile data helps.
+2. Open **`http://192.168.4.1/`**. It lists the networks the board can see, strongest first, with signal strength (−50 dBm is great, −80 dBm weak). Open/WEP networks are greyed out. **Scan again** refreshes the list.
+3. Pick a network, or type its name under "Not in the list?" (a typed name wins over the list). Type the password (8–64 characters) and press **Connect**.
+4. If it works, the hotspot disappears, the status LED turns on, and the login is saved in NVS for every later boot. If it fails, the page reloads after 25 s with the reason (wrong password / not found). Your phone may drop off the hotspot for a moment while the board tries; rejoin it if needed.
 
-```powershell
-. "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"
-idf.py --version                    # ESP-IDF v6.1
-python -m esptool version           # v5.3.1
-xtensa-esp32s3-elf-gcc --version    # ... 15.2.0
-```
+While no device is on the setup hotspot, the board retries every 30 s: first the last login typed into the page that hasn't worked yet, then the saved network. So it also comes back by itself after a router outage.
 
-### C.2 Environment variables
+**Using your phone's own hotspot.** A phone can't share its hotspot while it's joined to another Wi-Fi, so it can't be on `NightSentinel-Setup` with its hotspot running. Either:
+- **Do the setup from the laptop (easiest):** keep the phone hotspot on, join `NightSentinel-Setup` from the laptop, open `http://192.168.4.1/`, and pick the phone's hotspot from the list (it's there because the board scanned while it was on). Afterwards, put the laptop back on the phone hotspot.
+- **Phone only:** on the page, type the hotspot's name in "Not in the list?" plus its password, then press Connect. The first attempt fails (the hotspot is off), and that's expected. Leave `NightSentinel-Setup`, turn the hotspot on, and wait ~30–45 s. The board joins, saves the login, and the board shows up in the hotspot's connected devices.
 
-| Variable | Value | Set by | Status |
-|---|---|---|---|
-| `IDF_PATH`, `IDF_TOOLS_PATH`, `IDF_PYTHON_ENV_PATH`, `PATH` additions | see C.1 | The activation script, **only in the terminal that loads it**. Nothing ESP-IDF-related is set globally. | ✅ |
-| `PYTHONUTF8` | `1` (user-level, permanent) | `setx PYTHONUTF8 1`, to fix ESP-IDF's "not configured to handle Unicode characters" warning. Restart VS Code afterwards. | ✅ confirmed set on 2026-10-23 |
-| `IDF_TARGET` | should be unset or `esp32s3` | The VS Code extension passes its own selected target into terminals. If unset there, it defaulted to `esp32`. See [F](#f-troubleshooting-and-lessons-learned). | ✅ fixed |
+- **Only 2.4 GHz.** For an iPhone hotspot, turn on **Maximize Compatibility** (Settings → Personal Hotspot). ✅ The iPhone hotspot ran on 2.4 GHz channel 6 on 2026-11-06.
+- **Laptop on the same network** as the board, or `night-sentinel.local` won't answer.
+- **See what the laptop sees:** `netsh wlan show interfaces` (current network, band, channel) and `netsh wlan show networks mode=bssid` (nearby networks). ✅
+- **Forget the saved network:** `idf.py -p COM5 erase-flash` 🔥 ⏳, then flash again. Usually not needed: a failing network leads to the setup page anyway.
 
-### C.3 Opening an ESP-IDF terminal
+Status: ✅ 2026-11-06: fallback to setup mode, the scan, and joining the iPhone hotspot (IP 172.20.10.14), then rejoining it from the saved login after each reflash.
 
-Use one of these. **Never activate the `tools/` Python venv in the same terminal.**
+### 4.3 View the camera and change settings
 
-**Option A: any PowerShell window** ✅ (this is what was used for every build)
-
-```powershell
-. "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"
-idf.py --version
-```
-
-The leading `. ` (dot and space) matters: it loads the script into the current shell instead of running it in a child shell that exits straight away.
-
-**Option B: VS Code ESP-IDF extension** ✅
-1. Install **ESP-IDF** by Espressif Systems from Extensions (`Ctrl+Shift+X`).
-2. When it asks for a setup, choose the existing **v6.1** at `C:\esp\v6.1\esp-idf`. Don't let it download a second copy. This writes `.vscode/settings.json` with `"idf.currentSetup": "C:\\esp\\v6.1\\esp-idf"`. `.vscode/` is git-ignored because the path is specific to this machine.
-3. `Ctrl+Shift+P` → **ESP-IDF: Set Espressif Device Target** → **esp32s3** → **ESP32-S3 chip (via builtin USB-JTAG)**.
-4. `Ctrl+Shift+P` → **ESP-IDF: Open ESP-IDF Terminal**.
-
-The extension's commands run on **the folder open in VS Code**, so open `D:\Projects\od`, which has a top-level `CMakeLists.txt`, not a parent folder.
-
-**Option C: a dedicated VS Code terminal profile** ⏳ suggested, not set up on this machine. Add to the user `settings.json`:
-
-```json
-"terminal.integrated.profiles.windows": {
-  "ESP-IDF v6.1": {
-    "path": "powershell.exe",
-    "args": ["-NoExit", "-ExecutionPolicy", "Bypass",
-             "-Command", ". 'C:\\Espressif\\tools\\Microsoft.v6.1.PowerShell_profile.ps1'"]
-  }
-}
-```
-
-### C.4 Python tools environment (`tools/`, separate from ESP-IDF)
-
-**Purpose:** `tools/detect.py` is a PC-side YOLO (ultralytics) reference detector, used to compare against the board's detector later. It is **not** part of the firmware build.
-
-```powershell
-cd D:\Projects\od\tools
-uv sync                      # creates tools\.venv from uv.lock
-uv run detect.py --help      # sanity check
-```
-
-✅ Verified 2026-10-03 (`ultralytics==8.4.143` installed; `--help` printed usage). It needs Python ≥ 3.14 (`tools/pyproject.toml`).
-
-To activate the venv by hand, in a **normal** terminal (not the ESP-IDF one):
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned   # only if PowerShell blocks scripts
-.\tools\.venv\Scripts\Activate.ps1
-deactivate                                                         # to leave
-```
-
-**Keep the two environments in separate terminals.** VS Code's Python extension auto-activates venvs in new terminals. When `(od)` appeared in the ESP-IDF terminal prompt, it mixed the two Python environments. To stop that per folder, add `"python.terminal.activateEnvironment": false` to `.vscode/settings.json` (⏳ suggested, not applied).
-
----
-
-## D. Building, flashing and running
-
-### D.1 Locations
-
-| What | Path |
-|---|---|
-| Repository | `D:\Projects\od` (GitHub `Vanthoff007/od`, branch `main`) |
-| ESP-IDF project root | `D:\Projects\od` (has `CMakeLists.txt`, `project(night-sentinel)`) |
-| App component | `main/` (`app_main.c`) |
-| Board drivers | `components/board/` (`board_pins.h`, `status_led.c`, `ir.c`) |
-| Camera | `components/camera/` (`ns_cam_init/grab/release`) |
-| Wi-Fi + mDNS | `components/net/` (`ns_wifi_connect`, `ns_mdns_start`; SSID/password menu in its `Kconfig`) |
-| Debug web server | `components/debug_http/` (`/`, `/stream`, `/snap.jpg`) |
-| Partition table | `partitions.csv` |
-| Committed config | `sdkconfig.defaults` |
-| Generated, git-ignored | `build/`, `sdkconfig`, `sdkconfig.old`, `managed_components/` |
-
-### D.2 Configure
-
-The board's settings live in **`sdkconfig.defaults`**, which is committed. On the first configure, ESP-IDF copies them into `sdkconfig`, which is generated and ignored by git:
-
-```
-CONFIG_IDF_TARGET="esp32s3"
-CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
-CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
-CONFIG_SPIRAM=y
-CONFIG_SPIRAM_MODE_OCT=y
-CONFIG_SPIRAM_USE_MALLOC=y
-CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
-```
-
-**First time in a fresh clone** (✅ run on 2026-10-04):
-
-```powershell
-cd D:\Projects\od
-idf.py set-target esp32s3
-```
-
-- **What it does:** creates `sdkconfig` for the ESP32-S3 from `sdkconfig.defaults`.
-- **Caution:** `set-target` always runs `fullclean` first. It deletes `build/` and regenerates `sdkconfig`, so any menuconfig changes that aren't in `sdkconfig.defaults` are lost.
-
-**Interactive config** (✅ used on hello_world):
-
-```powershell
-idf.py menuconfig
-```
-
-Arrow keys to move, `S` to save, `Esc` to go back or exit. If you change a setting the project depends on, copy it into `sdkconfig.defaults` too, or it will be lost the next time `sdkconfig` is regenerated.
-
-### D.3 Build
-
-```powershell
-cd D:\Projects\od
-idf.py build
-```
-
-✅ Verified 2026-10-23. It ends with:
-
-```
-night-sentinel.bin binary size 0x2c530 bytes. Smallest app partition is 0x100000 bytes. 0xd3ad0 bytes (83%) free.
-...
-Project build complete. To flash, run:
- idf.py -p PORT flash
-```
-
-Optional size report (✅):
-
-```powershell
-idf.py size
-```
-
-> **Managed components:** `idf.py add-dependency "<namespace>/<name>"` creates or updates `main/idf_component.yml`. The next build or reconfigure resolves it into `dependencies.lock` and downloads the sources into `managed_components/` (git-ignored). Espressif recommends committing `idf_component.yml` and `dependencies.lock`.
-
-### D.4 Flash 🔥 (overwrites the app on the board)
-
-```powershell
-cd D:\Projects\od
-idf.py -p COM5 flash monitor
-```
-
-✅ Used repeatedly with hello_world, the project firmware, and the esp-dl example.
-
-- **What it does:** builds if anything changed, then writes three images over USB at 460 800 baud, then opens the monitor:
-
-  | Offset | Image |
-  |---|---|
-  | `0x0` | `build\bootloader\bootloader.bin` |
-  | `0x8000` | `build\partition_table\partition-table.bin` |
-  | `0x10000` | `build\night-sentinel.bin` |
-
-- Flash parameters come from `sdkconfig`: `--flash-mode dio --flash-size 16MB --flash-freq 80m`.
-- Reset is automatic (`--before default-reset --after hard-reset`). The BOOT/RST buttons were never needed.
-- `idf.py -p COM5 flash` (without `monitor`) flashes only.
-
-Expected flash output (abridged from a real run):
-
-```
-Changing baud rate to 460800...
-Writing 'bootloader/bootloader.bin' at 0x00000000...
-Hash of data verified.
-Writing 'partition_table/partition-table.bin' at ...
-Hash of data verified.
-Writing '<app>.bin' at 0x00010000...
-```
-
-**Equivalent raw esptool command** (⏳ not run, printed by the build). It's for flashing without `idf.py`, from `D:\Projects\od\build`:
-
-```powershell
-python -m esptool --chip esp32s3 -b 460800 --before default-reset --after hard-reset write-flash "@flash_args"
-```
-
-### D.5 Verify it's running
-
-1. In the monitor, check the boot banner and app log. A known-good hello_world boot (recorded 2026-10-03) showed:
-
-   ```
-   I (187) efuse_init: Chip rev:         v0.2
-   I (219) spi_flash: detected chip: winbond
-   I (222) spi_flash: flash io: dio
-   Hello world!
-   This is esp32s3 chip with 2 CPU core(s), WiFi/BLE, silicon revision v0.2, 2MB external flash
-   ```
-   (The "2MB" is the hello_world default. A 16 MB setting removes the `Detected size(16384k) larger than...` warning.)
-
-2. With PSRAM enabled, expect (✅ project firmware, 2026-10-23):
-
-   ```
-   I (203) esp_psram: Found 8MB PSRAM device
-   I (207) esp_psram: Speed: 40MHz
-   I (943) esp_psram: SPI SRAM memory test OK
-   I (1019) esp_psram: Adding pool of 8192K of PSRAM memory to heap allocator
-   ```
-3. For the current project firmware: the frame-rate result line shown in [B.3](#b3-open-a-serial-terminal-monitor).
-
-### D.6 Reset and erase
-
-| Action | Command | Status |
-|---|---|---|
-| Reset | Press **RST** on the board, unplug/replug, or `Ctrl+T` `Ctrl+R` in the monitor | ⏳ the monitor shortcut wasn't used |
-| Erase all flash 🔥 | `idf.py -p COM5 erase-flash` | ⏳ **never used.** It wipes the app, NVS (saved Wi-Fi credentials) and everything else. Not needed in normal work, since `flash` overwrites what it needs. |
-| Read flash chip ID (read-only) | `python -m esptool --chip esp32s3 -p COM5 flash-id` | ⏳ not run. The boot log already showed the 16 MB Winbond flash. |
-
-### D.7 Other firmware flashed so far
-
-| Firmware | How | Result | Status |
-|---|---|---|---|
-| ESP-IDF `hello_world` | Copied `$env:IDF_PATH\examples\get-started\hello_world` to `D:\Projects\hello_world`, then `idf.py set-target esp32s3`, `idf.py build`, `idf.py -p COM5 flash monitor` | Booted. Used for the flash and PSRAM checks. The folder has since been deleted. | ✅ |
-| DFRobot CameraWebServer (prebuilt `.bin` from [DFR1154_Examples](https://github.com/DFRobot/DFR1154_Examples)) | Done by the user. **The flashing method and offsets weren't recorded.** | Stream works (ticked in the tracker). | ✅ result, ⏳ procedure |
-| esp-dl `pedestrian_detect` example | See [E.3](#e3-ml-esp-dl-pedestrian-detection) | 3 detections on the bundled image | ✅ |
-| Project firmware (`night-sentinel`) | [D.3](#d3-build) + [D.4](#d4-flash--overwrites-the-app-on-the-board) | LED + IR on | ✅ |
-
-> ✅ **Current state (2026-10-23):** the board runs the project firmware with the Day 2 frame-rate test.
-
----
-
-## E. Project-specific configuration
-
-### E.1 Memory (flash, SRAM, PSRAM)
-
-| Item | Value | Status |
-|---|---|---|
-| Flash | 16 MB, DIO, 80 MHz. `docs/notes.md` records that QIO @ 80 MHz also worked when the esp-dl example used it; the project stays on DIO. | ✅ |
-| Partition table | **Custom** [`partitions.csv`](../partitions.csv): nvs 24 KB, phy_init 4 KB, **factory app 6 MB** (`CONFIG_PARTITION_TABLE_CUSTOM=y`). Changed 2026-10-23: with Wi-Fi linked in, the app was 91% of the old 1 MB partition. | ✅ flashed, boot log shows `factory ... 00600000` |
-| App size | 0xf3290 bytes (≈973 KB) with Wi-Fi, HTTP server and mDNS, 84% of the partition free | ✅ 2026-10-23 |
-| Internal RAM (DIRAM) | 51 954 / 341 760 bytes used (15.2 %) | ✅ `idf.py size` |
-| PSRAM | 8 MB octal, `CONFIG_SPIRAM_USE_MALLOC=y`, **80 MHz** (`CONFIG_SPIRAM_SPEED_80M`, since 2026-10-23; it was 40 MHz). Boot log: `esp_psram: Speed: 80MHz`, `SPI SRAM memory test OK` | ✅ works |
-| CPU | 240 MHz | ✅ |
-
-> ✅ The 6 MB factory partition also leaves room for esp-dl (the `pedestrian_detect` app alone was about 2.7 MB).
-
-**How PSRAM was first enabled (hello_world, ✅):** hello_world uses `idf_build_set_property(MINIMAL_BUILD ON)`, which hides the **ESP PSRAM** menu. The fix was to add `esp_psram` to `main/CMakeLists.txt` (`PRIV_REQUIRES spi_flash esp_psram`), then run `idf.py reconfigure` and `idf.py menuconfig` and set:
-- **Serial flasher config → Flash size → 16 MB**
-- **Component config → ESP PSRAM → Support for external, SPI-connected RAM → SPI RAM config → Mode → Octal Mode PSRAM**
-
-The project's `sdkconfig.defaults` already contains these settings, so the project doesn't need this step.
-
-### E.2 GPIO and peripherals
-
-All pin numbers the firmware uses live in [`components/board/include/board_pins.h`](../components/board/include/board_pins.h). Add a pin there before using it anywhere else.
-
-#### E.2.1 Pins used by the firmware
-
-| Function | GPIO | `board_pins.h` name | Notes | Status |
-|---|---|---|---|---|
-| Status LED | 3 | `PIN_STATUS_LED` | Plain GPIO output, active-high | ✅ in firmware |
-| IR LEDs | 47 | `PIN_IR_LED` | Drives EN of the SY7200A LED driver (`IR_CTL`), active-high. Plain GPIO now. If it is ever dimmed, use **LEDC timer 1 / channel 1**, because the camera's XCLK uses timer 0 / channel 0. | ✅ in firmware |
-
-#### E.2.2 Camera (OV3660)
-
-Source: DFRobot [`5_3.ino`](https://github.com/DFRobot/DFR1154_Examples/blob/master/5.3%20CameraWebServer/source%20code/5_3/5_3.ino) lines 5–22. ✅ **Verified on the board 2026-10-23:** the driver detected the OV3660 (`PID=0x3660`) at SCCB address `0x3C`, and 1,000 frames were captured with 0 NULL frames.
-
-| Signal | GPIO | `board_pins.h` name | `camera_config_t` field | Arduino name (`5_3.ino`) |
-|---|---|---|---|---|
-| Power-down | −1 (not connected) | `PIN_CAM_PWDN` | `pin_pwdn` | `PWDN_GPIO_NUM` |
-| Reset | −1 (not connected) | `PIN_CAM_RESET` | `pin_reset` | `RESET_GPIO_NUM` |
-| XCLK (clock to sensor) | 5 | `PIN_CAM_XCLK` | `pin_xclk` | `XCLK_GPIO_NUM` |
-| SCCB data (I2C SDA) | 8 | `PIN_CAM_SIOD` | `pin_sccb_sda` | `SIOD_GPIO_NUM` |
-| SCCB clock (I2C SCL) | 9 | `PIN_CAM_SIOC` | `pin_sccb_scl` | `SIOC_GPIO_NUM` |
-| D0 | 16 | `PIN_CAM_D0` | `pin_d0` | `Y2_GPIO_NUM` |
-| D1 | 18 | `PIN_CAM_D1` | `pin_d1` | `Y3_GPIO_NUM` |
-| D2 | 21 | `PIN_CAM_D2` | `pin_d2` | `Y4_GPIO_NUM` |
-| D3 | 17 | `PIN_CAM_D3` | `pin_d3` | `Y5_GPIO_NUM` |
-| D4 | 14 | `PIN_CAM_D4` | `pin_d4` | `Y6_GPIO_NUM` |
-| D5 | 7 | `PIN_CAM_D5` | `pin_d5` | `Y7_GPIO_NUM` |
-| D6 | 6 | `PIN_CAM_D6` | `pin_d6` | `Y8_GPIO_NUM` |
-| D7 | 4 | `PIN_CAM_D7` | `pin_d7` | `Y9_GPIO_NUM` |
-| VSYNC | 1 | `PIN_CAM_VSYNC` | `pin_vsync` | `VSYNC_GPIO_NUM` |
-| HREF | 2 | `PIN_CAM_HREF` | `pin_href` | `HREF_GPIO_NUM` |
-| PCLK (pixel clock from sensor) | 15 | `PIN_CAM_PCLK` | `pin_pclk` | `PCLK_GPIO_NUM` |
-
-- **Arduino `Y2`–`Y9` = ESP-IDF `pin_d0`–`pin_d7`.** The names are offset by two, which is the most common mistake when copying.
-- The camera's XCLK takes **LEDC timer 0 / channel 0**. Nothing else may use them.
-- The sensor is mounted upside down, so `ns_cam_init()` calls `set_vflip(s, 1)`.
-- Clock settings and the measured frame rate are in [E.5](#e5-camera-clocks-and-frame-rate).
-
-#### E.2.3 Other board peripherals (not in the firmware yet)
-
-These come from DFRobot's examples and wiki. None of them is in `board_pins.h` or verified on this board yet.
-
-| Function | GPIO | Source | Status |
-|---|---|---|---|
-| microSD (SPI mode) | CS 10 · MOSI 11 · MISO 13 · SCK 12 | DFRobot `6_9.ino` / `6_10.ino` | ⏳ Day 9 |
-| Speaker amp (MAX98357, I2S) | BCLK 45 · LRCLK/WS 46 · DOUT 42 | DFRobot examples 5.2 / 6.10, `setPins(45, 46, 42)` | ⏳ Day 7. No amp-enable pin in any example. |
-| Microphone (PDM) | CLK 38 · DATA 39 | DFRobot example 5.2 | not planned |
-| Light sensor (LTR-308) | Shares the camera's SCCB bus, GPIO 8 / 9 | DFRobot wiki | ⏳ I2C address unknown. A community firmware reports bus contention with the camera. |
-| BOOT button | 0 | DFRobot wiki | hardware |
-| Gravity UART | TX 43 · RX 44 | DFRobot wiki | not planned |
-
-#### E.2.4 Pins to avoid
-
-From the ESP32-S3 datasheet, for this board's configuration:
-
-| GPIO | Why |
-|---|---|
-| 19, 20 | USB D− / D+. This is the USB Serial/JTAG port used for flashing and the monitor. |
-| 26–32 | Connected to the SPI flash chip. |
-| 33–37 | Used by the **octal** PSRAM. |
-| 0, 3, 45, 46 | **Strapping pins**: they are read at reset to choose the boot mode and other settings. GPIO3 (status LED) and 45/46 (speaker) are already wired by DFRobot, so don't add pull-up or pull-down resistors to them. |
-
-How pins were checked: DFRobot example code first, then the DFRobot wiki, then the schematic (`resources/.../Schematic v1.1.pdf`). The full method is in `docs/next_steps.md` → "Where pin numbers come from".
-
-### E.3 ML: esp-dl pedestrian detection
-
-✅ Run on 2026-10-04 as a standalone test to decide between ESP-IDF v6.1 and v5.4.
-
-```powershell
-. "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"
-cd <some scratch folder outside the repo>
-idf.py create-project-from-example "espressif/esp-dl:pedestrian_detect"
-cd pedestrian_detect
-idf.py set-target esp32s3
-idf.py build
-idf.py -p COM5 flash monitor      # 🔥 replaces the project firmware
-```
-
-- The example **doesn't use the camera.** It runs on a `pedestrian.jpg` built into the firmware.
-- Result: 3 boxes, scores **0.884 / 0.879 / 0.786**, which matches Espressif's reference (0.884 / 0.884 / 0.805). Inference took **~130 ms**.
-- Its own `sdkconfig` used octal PSRAM, DIO, 8 MB flash and 80 MHz PSRAM.
-- Component versions at the time: `espressif/esp-dl` 3.3.x, `espressif/pedestrian_detect` 0.3.2.
-
-**Outcome:** stay on ESP-IDF v6.1. The original scratch folder has been deleted, so re-run the commands above to reproduce it.
-
-### E.4 In progress and not started
-
-- **Day 2, 2026-10-23:**
-  - ✅ `espressif/esp32-camera` **2.1.8** (pulls in `espressif/esp_jpeg` **1.3.1**) in `main/idf_component.yml`.
-  - ✅ `components/camera/` (`ns_cam_init`, `ns_cam_grab`, `ns_cam_release`): **16.6 FPS, 0 NULL and 0 short frames, PSRAM stable** at SYSCLK 30 / PCLK 15 MHz. See [E.5](#e5-camera-clocks-and-frame-rate).
-  - ✅ Wi-Fi station (`components/net/wifi.c`, SSID/password in menuconfig → **Night Sentinel Wi-Fi**). Reconnects forever.
-  - ✅ mDNS (`espressif/mdns` **1.14.0**, `components/net/ns_mdns.c`): `night-sentinel.local`.
-  - ✅ Debug web server (`components/debug_http/`): `/`, `/stream`, `/snap.jpg`. See [E.6](#e6-viewing-the-camera).
-  - ✅ `tools/grab_snaps.py`, which saves snapshots to `test-results/day2/`.
-  - 🟡 Horizontal lines seen in the browser live view; not found in the frames themselves. See [issues_log.md](issues_log.md).
-- Not started: unit tests (Unity; planned layout `components/board/test/` + a `test/` project modelled on `C:\esp\v6.1\esp-idf\examples\system\unit_test`).
-- Not started: bringing esp-dl into the project, and model or quantization work.
-
-### E.5 Camera clocks and frame rate
-
-✅ Measured 2026-10-23: QVGA RGB565, `fb_count = 2`, `CAMERA_GRAB_LATEST`, 1,000 frames each. "Short frames" counts the driver's `cam_hal: FB-SIZE: ... != 153600` lines. These are frames the driver throws away without returning NULL.
-
-| Clock setting | Log line (`ov3660: Calculated ...`) | Good FPS | Short frames |
-|---|---|---|---|
-| Driver default | `SYSCLK: 20000000 Hz, PCLK: 10000000 Hz` | 5.5 (180.3 s) | 0 |
-| `set_pll(s, 0, 12, 1, 0, 0, 2, 1, 4)` (**in use**) | `SYSCLK: 30000000 Hz, PCLK: 15000000 Hz` | **16.6** (60.2 s) | **0** |
-| `set_pll(s, 0, 8, 1, 0, 0, 0, 1, 4)` | `SYSCLK: 40000000 Hz, PCLK: 20000000 Hz` | 11.1 (90.1 s) | 1,207: about every other frame is 216 of 240 lines |
-| `set_pll(s, 0, 8, 1, 0, 0, 0, 1, 8)` | `SYSCLK: 40000000 Hz, PCLK: 10000000 Hz` | 0 | none arrive: `cam_hal: Failed to get frame: timeout` every 4 s |
-
-PSRAM free was 8,077,692 bytes before and after every run.
-
-- **Frame timing:** at QVGA the driver sets a frame of 2300 × 783 clock cycles (line length × binned frame height, from `ov3660_settings.h`). At 30 MHz that is 60 ms, which matches the 16.6 FPS measured.
-- **At 20 MHz PCLK:** the camera interface loses the end of about every other frame.
-- **At the default clocks:** half the theoretical rate (5.5 instead of about 11 FPS). Lighting and `fb_count = 3` made no difference.
-- **`set_pll` argument order** (the public function): `bypass, multiplier, sys_div, root_2x, pre_div, seld5, pclk_manual, pclk_div`. The driver's internal `set_pll` swaps `root_2x` and `pre_div`.
-- **⚠️ Lesson:** a capture test must also count `FB-SIZE` lines. The first 40/20 MHz result was reported as "11.1 FPS, 0 failures" because the log filter skipped these unprefixed lines.
-- ✅ **Pixel quality at 30/15 MHz:** snapshots are clean and correctly coloured. The plain-wall test showed no horizontal noise lines.
-
-**With Wi-Fi on and `/stream` running** (45 s stream + 5 snapshots per run, ~57 s):
-
-| Setting | `FB-SIZE` drops | Stream FPS | Result |
-|---|---|---|---|
-| Camera task core 0, PSRAM 40 MHz | ~1 per 2 s | 8.8 | clean |
-| Camera task **core 1** (`CONFIG_CAMERA_CORE1`) | 39 | 8.7 | no real change; kept |
-| + PSRAM **80 MHz** | 16–23 | 9.0 | ✅ **in use** |
-| + `CONFIG_CAMERA_PSRAM_DMA` | 0 | 7.7 | ❌ garbage band across the bottom of some frames (JPEG 14–35 KB instead of ~8.5 KB). Not used |
-
-The remaining drops are frames the driver discards, never shown. They come from PSRAM contention: the JPEG encoder reads PSRAM while the camera writes it.
-
-**Anti-flicker:** after `set_pll`, `ns_cam_init()` sets the 50/60 Hz band step for the 30 MHz clock: line = 2300 / 30 MHz = 76.7 µs, so 50 Hz = 130 lines (max 6 bands) and 60 Hz = 109 lines (max 7). The driver forces 50 Hz mode. **Recalculate these if the clocks change.**
-
-### E.6 Viewing the camera
-
-The board must be on Wi-Fi. The address is `night-sentinel.local` (mDNS) or the IP from the log (`wifi: got IP ...`), currently 192.168.1.22. The server handles **one request at a time**, so an open `/stream` blocks `/snap.jpg` until it closes.
+Two servers run so the stream doesn't block anything: **port 80** serves the page, snapshots, controls and status, and **port 81** serves only the live stream.
 
 | What | How | Status |
 |---|---|---|
-| Live view in a browser | `http://night-sentinel.local/` | ✅ |
-| Live view in VLC | Media → Open Network Stream → `http://night-sentinel.local/stream` | ⏳ not tried |
-| One snapshot | `http://night-sentinel.local/snap.jpg` | ✅ |
-| Save N snapshots | `cd tools`, then `uv run grab_snaps.py night-sentinel.local -n 10` → `test-results/day2/` | ✅ |
-| Find the IP without mDNS | `arp -a`, then look for `28-84-85-5c-6c-cc` | ✅ |
+| Live view + controls | Browser: `http://night-sentinel.local/`. IR on/off, gain ceiling, AE level, brightness, AEC2, greyscale; the status line updates every 2 s | ✅ 2026-11-06 |
+| Live view in VLC | Media → Open Network Stream → `http://night-sentinel.local:81/stream` | ⏳ (curl: 109 frames in ~12 s ✅) |
+| One snapshot | `http://night-sentinel.local/snap.jpg`; also works while a stream is open (HTTP 200 in 0.22 s) | ✅ |
+| Change one setting | `http://night-sentinel.local/control?var=ir&val=1` (names below); unknown name → HTTP 400 | ✅ |
+| Current state (JSON) | `http://night-sentinel.local/status`: `ir`, `als_lux` (LTR-308), `luma` (0–255), `gain`, `exposure_ms`, gain ceiling, settings | ✅ |
+| Save snapshots | `cd D:\Projects\od\tools` then `uv run grab_snaps.py night-sentinel.local -n 10` (`-t` interval, `-o` folder) → `test-results\day2\` | ✅ |
+| Day 3 captures | `uv run capture_set.py tune --ir on` / `snap ...` / `light ...` ([tools/README.md](../tools/README.md)) | ⏳ |
+| IP without mDNS | `arp -a`, line with MAC `28-84-85-5c-6c-cc` (DHCP may change the IP; reserve it in the router to fix it) | ✅ |
 
-The stream is MJPEG (JPEG quality 80 encoded on the chip): about 9 fps and about 8.5 KB per frame. The monitor logs `http: stream: N frames, X fps` every 50 frames. To re-run the 1,000-frame capture test, set `RUN_CAPTURE_TEST 1` in `main/app_main.c`. The test and the stream would compete for frames otherwise.
+`/control` names, ranges, boot values and what each does: [Appendix B.3](#b3-live-settings-controlvarnamevaln). Registers via `/reg`: [B.4](#b4-registers-reference). Settings reset at reboot.
 
----
+The stream is MJPEG encoded on the chip (JPEG quality 80): ~9 fps, ~8.5 KB per frame. The monitor logs `http: stream: N frames, X fps` every 50 frames and `stream closed after N frames` when the viewer leaves.
 
-## F. Troubleshooting and lessons learned
+To run without the laptop, power it from a charger ([1.1](#11-hardware)) and use the addresses above.
 
-Quick-lookup table by symptom. The full, dated history of each problem is in [issues_log.md](issues_log.md).
+### 4.4 Capture test
 
-| Problem or error | Likely cause | Solution or diagnostic steps | Status |
-|---|---|---|---|
-| `idf.py`, `cmake`, `ninja`, compiler all "not found" | EIM GUI was open but hadn't installed anything yet | Finish the EIM install, then load the activation script ([C.3](#c3-opening-an-esp-idf-terminal)) | ✅ Fixed |
-| EIM installed **v6.1**, but the build plan specified v5.4.x | EIM's default version | Built **and ran** esp-dl `pedestrian_detect` on v6.1 with correct results ([E.3](#e3-ml-esp-dl-pedestrian-detection)). Decision: **stay on v6.1**. | ✅ Resolved 2026-10-04 |
-| `Project sdkconfig ... was generated for target 'esp32s3', but environment variable IDF_TARGET is set to 'esp32'` | The VS Code ESP-IDF extension passes its own target into terminals, and it defaulted to `esp32` | **Don't** run `idf.py set-target esp32`; the board is an ESP32-S3. Set the target in the extension (**ESP-IDF: Set Espressif Device Target → esp32s3 → builtin USB-JTAG**) and open a new terminal. Quick fix for one terminal: `$env:IDF_TARGET = "esp32s3"`. | ✅ Fixed |
-| `(od)` appeared in the ESP-IDF terminal prompt | VS Code's Python extension auto-activated the repo's Python venv | Use separate terminals for ESP-IDF and Python; optionally set `"python.terminal.activateEnvironment": false` | ✅ Practice adopted (setting ⏳ not applied) |
-| `CMakeLists.txt not found in project directory D:\Projects\od` | The extension ran **Set Target** on a folder that wasn't an ESP-IDF project at the time (hello_world was in a subfolder) | Open the ESP-IDF project folder itself in VS Code. `D:\Projects\od` is now a proper project with a top-level `CMakeLists.txt`. | ✅ Fixed |
-| `Your environment is not configured to handle Unicode characters` | The Windows console codepage isn't UTF-8 | `setx PYTHONUTF8 1`, then restart VS Code completely. (Per terminal: `chcp 65001`.) | ✅ Fixed |
-| `W spi_flash: Detected size(16384k) larger than the size in the binary image header(2048k)` | hello_world's default flash size is 2 MB | Set **Flash size → 16 MB**. The project's `sdkconfig.defaults` already does this. | ✅ Fixed |
-| **ESP PSRAM** missing from menuconfig | `MINIMAL_BUILD ON` hides components that `main` doesn't depend on | Add `esp_psram` to `PRIV_REQUIRES` in `main/CMakeLists.txt`, then `idf.py reconfigure` | ✅ Fixed |
-| An edit "didn't work" (seen twice) | The file wasn't saved in VS Code (dot on the editor tab) | `Ctrl+S`, then re-run. Check with `git status`. | ✅ Lesson |
-| IR LEDs not visible on a phone camera | 940 nm IR is filtered out by most phone cameras, especially rear ones | Try the phone's front camera in the dark, use a USB power meter (expect a current jump), or best of all use the board's own camera (CameraWebServer stream or a Day 2 snapshot) | ✅ IR confirmed working (method not recorded) |
-| Log said "status LED OFF" while the LED was on | Log text was stale after a code change | Fixed in `app_main.c` | ✅ Fixed |
-| `Failed to connect` while flashing | Chip not entering download mode | Hold **BOOT**, tap **RST**, release BOOT, retry | ⏳ Suggested, never needed |
-| No COM port appears | Charge-only cable or bad port | Swap the cable or USB port | ⏳ Suggested, never needed |
-| Port busy / access denied | Another monitor has the port open | Close the other program | ⏳ Suggested, never needed |
-| PSRAM not found / boot loop after enabling PSRAM | Wrong PSRAM mode | Switch Octal ↔ Quad in menuconfig. On this board **Octal** is correct. | ⏳ Not hit (Octal worked the first time) |
-| `ERROR: Component "espressif/camera" not found` | Wrong component name | The driver is **`espressif/esp32-camera`**: `idf.py add-dependency "espressif/esp32-camera"` | ✅ Fixed 2026-10-23 |
-| `multiple definition of 'cam_init'` at link time | The driver's `cam_hal.c` already defines a global `cam_init`. C has one global namespace for functions. | Prefix the project's functions: `ns_cam_init`, `ns_cam_grab`, `ns_cam_release` | ✅ Fixed 2026-10-23 |
-| Own header named `esp_camera.h` | Would hide the driver's header of the same name | Named it `camera.h` instead | ✅ Avoided |
-| Camera only 5.5 FPS at QVGA | Driver's default OV3660 clocks for RGB565 | `set_pll` to 30/15 MHz in `ns_cam_init()`, see [E.5](#e5-camera-clocks-and-frame-rate) | ✅ Fixed (16.6 FPS) |
-| `cam_hal: FB-SIZE: 138240 != 153600` repeated | Pixel clock too fast (20 MHz): frames arrive short and are silently dropped | Use 30/15 MHz, not 40/20 | ✅ Fixed |
-| `cam_hal: Failed to get frame: timeout` every 4 s | Sensor SYSCLK raised without raising PCLK | Change both together, or remove the `set_pll` call | ✅ Understood |
-| `gpio_get_level()` always reads 0 in a unit test | On the ESP32-S3, an output-only pin can't be read back | Use `GPIO_MODE_INPUT_OUTPUT` or `gpio_dump_io_configuration()` | ⏳ Known in advance; tests not written yet |
+To re-measure camera capture, set `#define RUN_CAPTURE_TEST 1` in `main/app_main.c`, then flash. It grabs 1,000 frames before Wi-Fi starts and logs fps, NULL frames and free PSRAM. ✅ Expected: `grabbed 1000 frames in ~60200 ms, 0 failures, 16 fps`. **Also count the `FB-SIZE` lines:** they aren't NULL frames, and the loop doesn't see them. Set it back to 0 afterwards; it would compete with the stream for frames.
 
----
+The brightness log (`main: light: ...` every 5 s) is controlled by `#define LOG_LIGHT_EVERY_MS 5000` in the same file; 0 turns it off.
 
-## G. Quick reference: commands
+### 4.5 Open issues
 
-"IDF terminal" means a PowerShell with the activation script loaded (G.3).
+| Issue | Status |
+|---|---|
+No open issues (2026-11-06). Closed:
 
-### G.1 Identify and access the ESP32
+| Issue | Outcome |
+|---|---|
+| Horizontal lines in the **browser** live view | ✅ closed 2026-11-06: gone with the new page, which no longer uses `image-rendering: pixelated`. The frames were always clean |
+| IR LEDs light the scene | ✅ closed 2026-11-06: checked by you in the dark. Also measured in room light: IR on cut sensor gain from 8.6× to 1.25× and exposure from 60 to 30 ms |
+| Setup page / saved login | ✅ closed 2026-11-06: board joined the iPhone hotspot (172.20.10.14) and rejoins it from the saved login at every boot |
+| Reading LTR-308 lux while the camera runs (shared bus) | ✅ closed 2026-11-06: 2 runs × 300 lux reads plus camera register reads at 10/s during full-speed capture: 0 I2C errors, 0 camera chip-ID mismatches, 0 NULL frames, 0 `FB-SIZE` drops, frame rate not lower ([4.6](#46-shared-i2c-bus-test)) |
 
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `[System.IO.Ports.SerialPort]::GetPortNames()` | List COM port names | anywhere | any PowerShell |
-| `Get-CimInstance Win32_PnPEntity \| Where-Object { $_.Name -match "\(COM\d+\)" } \| Select-Object Name, DeviceID` | List COM ports with descriptions. The board is "USB Serial Device". | anywhere | any PowerShell |
-| `python -m esptool --chip esp32s3 -p COM5 flash-id` ⏳ | Read the chip and flash ID (read-only) | anywhere | IDF terminal, board plugged in |
+Found during the bus test, for Day 5: with the scene at ~35 lux, capture ran at **11.4 fps** with no other load (Day 2: 16.6 fps). It wasn't start-up settling, power management, or I2C (the busy-bus phase was faster, 13.6–15.8 fps). Still above the detector's ≥6 fps; measure again on Day 5.
 
-### G.2 Open and close the serial terminal
+### 4.6 Shared I2C bus test
 
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `idf.py -p COM5 monitor` | Open the serial monitor at 115 200 baud | `D:\Projects\od` | IDF terminal, project built (for address decoding) |
-| `Ctrl+]` | Exit the monitor | in the monitor | — |
-| `Ctrl+T`, `Ctrl+R` ⏳ | Reset the board from the monitor | in the monitor | — |
+Set `#define RUN_LIGHT_BUS_TEST 1` in `main/app_main.c` and flash. Before Wi-Fi starts, the board grabs frames at full speed for 80 s: warm-up 10 s → camera only 20 s → camera + I2C (LTR-308 lux + camera chip-ID + AE registers, 10× per second) 30 s → camera only 20 s. Pass: 0 lux errors, 0 chip-ID mismatches, 0 NULL frames, no `FB-SIZE` lines between the phase markers, and the I2C phase's fps no lower than camera-only. Set it back to 0 afterwards (it delays boot by 80 s).
 
-### G.3 Activate the development environment
+✅ 2026-11-06, run 2:
 
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `. "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"` | Load ESP-IDF v6.1 into this terminal | anywhere | EIM install |
-| VS Code: **ESP-IDF: Open ESP-IDF Terminal** | Same thing, from VS Code | VS Code with `D:\Projects\od` open | ESP-IDF extension |
-| `.\tools\.venv\Scripts\Activate.ps1` | Activate the Python tools venv (**separate terminal**) | `D:\Projects\od` | `uv sync` done |
+```
+bus test: phase "warm-up" end: 111 frames in 10.0 s = 11.1 fps, 0 NULL
+bus test: phase "camera only" end: 228 frames in 20.0 s = 11.4 fps, 0 NULL
+bus test: phase "camera + I2C" end: 408 frames in 30.0 s = 13.6 fps, 0 NULL
+bus test: LTR-308 300 ok / 0 errors (33.8..36.7 lux), camera chip-ID mismatches 0
+bus test: phase "camera only again" end: 228 frames in 20.0 s = 11.4 fps, 0 NULL
+```
 
-### G.4 Install or verify dependencies
-
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `idf.py --version` | Expect `ESP-IDF v6.1` | anywhere | IDF terminal |
-| `python -m esptool version` | Expect `v5.3.1` | anywhere | IDF terminal |
-| `xtensa-esp32s3-elf-gcc --version` | Expect GCC 15.2.0 | anywhere | IDF terminal |
-| `[Environment]::GetEnvironmentVariable("PYTHONUTF8","User")` | Expect `1` | anywhere | — |
-| `uv sync` | Create or update the Python tools venv | `D:\Projects\od\tools` | uv |
-| `uv run detect.py --help` | Check the Python tool runs | `D:\Projects\od\tools` | `uv sync` done |
-
-### G.5 Configure and build
-
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `idf.py set-target esp32s3` | First-time setup in a fresh clone (**runs fullclean, regenerates `sdkconfig`**) | `D:\Projects\od` | IDF terminal |
-| `idf.py menuconfig` | Interactive config editor (`S` save, `Esc` back) | `D:\Projects\od` | IDF terminal |
-| `idf.py reconfigure` | Re-run CMake after changing component dependencies | `D:\Projects\od` | IDF terminal |
-| `idf.py build` | Compile bootloader, partition table and app | `D:\Projects\od` | IDF terminal |
-| `idf.py size` | Memory usage summary | `D:\Projects\od` | built |
-| `idf.py fullclean` | Delete `build/` (fixes stale-config problems) | `D:\Projects\od` | IDF terminal |
-
-### G.6 Flash and reset the ESP32
-
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `idf.py -p COM5 flash` 🔥 | Build if needed and write firmware | `D:\Projects\od` | IDF terminal, board on COM5 |
-| `idf.py -p COM5 flash monitor` 🔥 | Flash, then open the monitor | `D:\Projects\od` | same |
-| `idf.py -p COM5 erase-flash` 🔥⏳ | **Erase the whole flash.** Never used. | `D:\Projects\od` | same |
-| BOOT + RST buttons ⏳ | Manual download mode if auto-reset fails | — | — |
-
-### G.7 Run firmware and inspect logs
-
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `idf.py -p COM5 monitor` | Watch logs. With the current firmware, expect `wifi: got IP ...` a few seconds after boot ([B.3](#b3-open-a-serial-terminal-monitor)). | `D:\Projects\od` | flashed |
-
-### G.8 Debug common issues
-
-| Command | What it does | Run from | Needs |
-|---|---|---|---|
-| `$env:IDF_TARGET = "esp32s3"` | Override a wrong `IDF_TARGET` in this terminal | anywhere | — |
-| `setx PYTHONUTF8 1` | Permanently fix the Unicode warning (restart VS Code after) | anywhere | — |
-| `chcp 65001` | Per-terminal Unicode fix | anywhere | — |
-| `git status --short` | Check that edits were actually saved | `D:\Projects\od` | — |
-| `Select-String -Path sdkconfig -Pattern "SPIRAM_MODE\|FLASHSIZE"` | Confirm PSRAM mode and flash size in the generated config | `D:\Projects\od` | `sdkconfig` exists |
+Full history and measurements of every problem: [issues_log.md](issues_log.md).
 
 ---
 
-## H. Reproducing the setup from scratch
+## 5. Quick reference
 
-From a clean Windows machine to the project firmware running on the board. ⏳ marks steps whose exact details weren't recorded or that haven't been re-run from scratch.
-
-1. **Install Git for Windows.** ✅ (pre-existing; exact installer not recorded ⏳)
-2. **Clone the repo** to `D:\Projects\od`:
-   ```powershell
-   git clone https://github.com/Vanthoff007/od.git D:\Projects\od
-   ```
-   ⏳ The repo was not cloned fresh; it already existed on this machine.
-3. **Install ESP-IDF v6.1 with the EIM GUI** (`eim-gui-windows-x64-v0.19.0.exe` was used). Choose ESP-IDF **v6.1**, target **esp32s3**, the install path `C:\esp`, and the tools path `C:\Espressif\tools`. ⏳ The exact GUI options weren't recorded; check that the result matches the paths in [C.1](#c1-esp-idf-v61-via-eim).
-4. **Fix the Unicode warning** once: `setx PYTHONUTF8 1`, then close and reopen all terminals and VS Code. ✅
-5. **Open an IDF terminal and verify** ([G.4](#g4-install-or-verify-dependencies)):
-   ```powershell
-   . "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"
-   idf.py --version            # ESP-IDF v6.1
-   ```
-   ✅
-6. **(Optional) VS Code:** install the ESP-IDF extension, pick the existing v6.1 setup, open `D:\Projects\od`, and set the target to **esp32s3 / builtin USB-JTAG** ([C.3](#c3-opening-an-esp-idf-terminal), Option B). ✅
-7. **Plug in the board** with a data-capable USB-C cable and find its COM port ([B.1](#b1-find-the-boards-serial-port)). It was COM5 here; substitute yours. ✅
-8. **(Optional, recommended once per new board) toolchain smoke test** with hello_world:
-   ```powershell
-   Copy-Item "$env:IDF_PATH\examples\get-started\hello_world" D:\Projects\hello_world -Recurse
-   cd D:\Projects\hello_world
-   idf.py set-target esp32s3
-   idf.py build
-   idf.py -p COM5 flash monitor     # expect "esp32s3 chip with 2 CPU core(s) ... revision v0.2"; Ctrl+] to exit
-   ```
-   ✅
-9. **Configure and build the project:**
-   ```powershell
-   cd D:\Projects\od
-   idf.py set-target esp32s3
-   idf.py build                      # "Project build complete"
-   ```
-   ✅
-10. **Flash and watch it run** 🔥:
-    ```powershell
-    idf.py -p COM5 flash monitor
-    ```
-    Expect `camera init OK`, then `wifi: got IP ...` and `http: debug server on port 80`. Open `http://<IP>/` in a browser. ⏳
-11. **(Optional) Python tools:** in a separate, non-IDF terminal:
-    ```powershell
-    cd D:\Projects\od\tools
-    uv sync
-    uv run detect.py --help
-    ```
-    Needs `uv` and Python ≥ 3.14 ⏳ (how uv was installed wasn't recorded). ✅ for the commands themselves.
-
-### Still to confirm
-
-- ⏳ The exact EIM options and whether EIM adds a Start-menu or desktop shortcut for the IDF PowerShell.
-- ⏳ How the DFRobot CameraWebServer `.bin` was flashed (tool, offset).
-- ⏳ The `erase-flash`, `flash-id`, raw `esptool write-flash` and monitor-reset commands, which have never been run on this board.
-
----
-
-## I. Data types used in the firmware
-
-Types that appear in the project's C code (`main/`, `components/board/`, `components/camera/`) as of 2026-10-23. The definitions below were checked against the installed headers (ESP-IDF v6.1 in `C:\esp\v6.1\esp-idf\components\`, and esp32-camera 2.1.8 in `managed_components/`) and against the compiler itself.
-
-### I.1 Basic C types on the ESP32-S3
-
-The ESP32-S3 is a **32-bit** Xtensa chip. Sizes reported by `xtensa-esp32s3-elf-gcc -dM -E -` (✅ checked):
-
-| Type | Size | Underlying type | Notes |
-|---|---|---|---|
-| `char` | 1 byte | — | **Unsigned by default** on Xtensa (`__CHAR_UNSIGNED__`). Use `int8_t` if you need a signed byte. |
-| `int`, `unsigned int` | 4 bytes | — | |
-| `long` | 4 bytes | — | Same size as `int` (not 8 like on 64-bit Linux). |
-| `long long` | 8 bytes | — | |
-| pointer (`T *`) | 4 bytes | — | |
-| `size_t` | 4 bytes | `unsigned int` | Buffer lengths, heap sizes. |
-| `int8_t` / `uint8_t` | 1 byte | `signed char` / `unsigned char` | Raw bytes, pixel data. |
-| `int16_t` / `uint16_t` | 2 bytes | `short` / `unsigned short` | e.g. RGB565 pixels, sensor IDs. |
-| `int32_t` / `uint32_t` | 4 bytes | **`long` / `unsigned long`** | Not `int`. This matters for `printf` (I.4). |
-| `int64_t` / `uint64_t` | 8 bytes | `long long` / `unsigned long long` | Timestamps. |
-| `float` | 4 bytes | — | Done in hardware on the S3's FPU. |
-| `double` | 8 bytes | — | The FPU is single-precision only, so `double` maths runs in software and is slower. Prefer `float` in hot loops. |
-| `bool` | 1 byte | `_Bool` | Needs `#include <stdbool.h>` (included by `ir.h` and `status_led.h`). |
-
-### I.2 ESP-IDF and FreeRTOS types
-
-| Type | Defined in | What it is | Used where |
-|---|---|---|---|
-| `esp_err_t` | `esp_common/include/esp_err.h` | `typedef int`. `ESP_OK` = 0, `ESP_FAIL` = −1, other codes are positive. Convert to text with `esp_err_to_name(err)`. | `ns_cam_init()` return value; GPIO driver calls return it too (currently ignored in `ir.c` / `status_led.c`) |
-| `gpio_num_t` | `esp_hal_gpio/esp32s3/include/soc/gpio_num.h` | `enum` of pins: `GPIO_NUM_0` … `GPIO_NUM_48` (e.g. `GPIO_NUM_47 = 47`). | `gpio_reset_pin`, `gpio_set_direction`, `gpio_set_level` take it. `board_pins.h` passes plain `#define` integers, which C converts implicitly. |
-| `gpio_mode_t` | `esp_hal_gpio/include/hal/gpio_types.h` | `enum`: `GPIO_MODE_OUTPUT`, `GPIO_MODE_INPUT_OUTPUT`, … | `gpio_set_direction(..., GPIO_MODE_OUTPUT)` in `ir.c`, `status_led.c` |
-| `uint32_t` level | `gpio_set_level(gpio_num_t, uint32_t level)` | 0 = low, non-zero = high | `ir_set(bool on)` passes the `bool` straight through (`true` → 1) |
-| `ledc_timer_t`, `ledc_channel_t` | `esp_hal_ledc/include/hal/ledc_types.h` | `enum`s naming an LEDC timer / channel | `camera_config_t.ledc_timer = LEDC_TIMER_0`, `.ledc_channel = LEDC_CHANNEL_0` (the camera's XCLK) |
-| `TickType_t` | FreeRTOS `portmacro.h` | `uint32_t` (ESP-IDF sets `configUSE_16_BIT_TICKS 0`). One tick = 10 ms here (`CONFIG_FREERTOS_HZ=100`). | `vTaskDelay(pdMS_TO_TICKS(5000))` in the Day 1 code |
-| `BaseType_t` / `UBaseType_t` | FreeRTOS `portmacro.h` | `int` / `unsigned int`; FreeRTOS's return/status type (`pdTRUE`, `pdPASS`) | not used yet (will appear with tasks and queues) |
-| `int64_t` (time) | `esp_timer/include/esp_timer.h` | `esp_timer_get_time()` returns **microseconds since boot** as `int64_t` | FPS timing in `app_main.c` |
-| `size_t` (heap) | `heap/include/esp_heap_caps.h` | `heap_caps_get_free_size(uint32_t caps)` returns free bytes. `MALLOC_CAP_SPIRAM` (`1<<10`) selects PSRAM. | PSRAM check in `app_main.c` |
-| `const char *` tag | `esp_log.h` | `static const char *TAG = "main";` is the prefix shown in each log line | `main`, `camera` |
-
-### I.3 Camera driver types (esp32-camera 2.1.8)
-
-From `managed_components/espressif__esp32-camera/driver/include/esp_camera.h` and `sensor.h`. ✅ Checked against the headers. ✅ The camera code runs on the board (2026-10-23).
-
-| Type | Kind | Key fields / values | Used in |
-|---|---|---|---|
-| `camera_config_t` | `struct` | Pins are all **`int`** (`pin_pwdn`, `pin_reset`, `pin_xclk`, `pin_sccb_sda`, `pin_sccb_scl`, `pin_d0`–`pin_d7`, `pin_vsync`, `pin_href`, `pin_pclk`). **−1 means not connected** (PWDN and RESET on this board). Also `int xclk_freq_hz`, `ledc_timer_t ledc_timer`, `ledc_channel_t ledc_channel`, `pixformat_t pixel_format`, `framesize_t frame_size`, `int jpeg_quality` (0–63, lower is better), `size_t fb_count`, `camera_fb_location_t fb_location`, `camera_grab_mode_t grab_mode`. | `ns_cam_init()` in `components/camera/camera.c` |
-| `camera_fb_t` | `struct` (one frame) | `uint8_t *buf` pixel data · `size_t len` bytes · `size_t width`, `size_t height` · `pixformat_t format` · `struct timeval timestamp` (time since boot of the frame's first DMA buffer) | returned by `ns_cam_grab()`, passed to `ns_cam_release()` |
-| `pixformat_t` | `enum` | `PIXFORMAT_RGB565` (2 bytes per pixel), also `PIXFORMAT_JPEG`, `PIXFORMAT_GRAYSCALE`, `PIXFORMAT_YUV422`, … | `.pixel_format = PIXFORMAT_RGB565` |
-| `framesize_t` | `enum` | `FRAMESIZE_QVGA` = 320×240, also `FRAMESIZE_VGA`, … | `.frame_size = FRAMESIZE_QVGA` |
-| `camera_fb_location_t` | `enum` | `CAMERA_FB_IN_PSRAM`, `CAMERA_FB_IN_DRAM` | `.fb_location = CAMERA_FB_IN_PSRAM` |
-| `camera_grab_mode_t` | `enum` | `CAMERA_GRAB_WHEN_EMPTY`, `CAMERA_GRAB_LATEST` | `.grab_mode = CAMERA_GRAB_LATEST` |
-| `sensor_t` | `struct` of sensor info and **function pointers** | e.g. `int (*set_vflip)(sensor_t *sensor, int enable)`; call as `s->set_vflip(s, 1)`. `s->id` is a `sensor_id_t`. | `ns_cam_init()` after `esp_camera_sensor_get()` |
-| `sensor_id_t` | `struct` | `uint16_t PID` (sensor product ID), plus other ID fields | logged in `ns_cam_init()` |
-
-**One RGB565 QVGA frame** = 320 × 240 × 2 bytes = **153 600 bytes** (`fb->len`). With `fb_count = 2`, that's about 300 KB of frame buffers, which is why they go in PSRAM rather than the ~340 KB of internal RAM.
-
-**In RGB565**, each pixel is one 16-bit value (5 bits red, 6 green, 5 blue) stored as two `uint8_t` bytes in `buf`. The byte order matters when decoding it. The Day 2 guide (`docs/next_steps.md`) flags a swapped order as a cause of wrong colours.
-
-### I.4 Printing these types in `ESP_LOGx`
-
-`ESP_LOGI`/`ESP_LOGE` use `printf`-style formats. ESP-IDF builds with `-Wall`, so format mismatches produce warnings, and possibly errors. Because `int32_t`/`uint32_t` are `long` here, `%d`/`%u` are wrong for them.
-
-| Type | Specifier | Portable form (`#include <inttypes.h>`) |
+| Task | Command (IDF terminal, in `D:\Projects\od` unless noted) | Details |
 |---|---|---|
-| `int` / `bool` / `esp_err_t` | `%d` | — |
-| `size_t` | `%zu` | — |
-| `uint32_t` | `%lu` | `"%" PRIu32` (recommended) |
-| `int32_t` | `%ld` | `"%" PRId32` |
-| `int64_t` (e.g. `esp_timer_get_time()`) | `%lld` | `"%" PRId64` |
-| `uint16_t` / `uint8_t` | `%u` (promoted to `int`) or `%x` for hex | `"%" PRIu16` |
-| `float` / `double` | `%f` (`float` is promoted to `double`) | — |
-| pointer | `%p` | — |
-| `esp_err_t` as text | `%s` with `esp_err_to_name(err)` | — |
+| Load ESP-IDF | `. "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"` | [1.4](#14-open-an-esp-idf-terminal) |
+| List COM ports | `[System.IO.Ports.SerialPort]::GetPortNames()` (any PowerShell) | [2.1](#21-find-the-serial-port) |
+| First-time config | `idf.py set-target esp32s3` (wipes `sdkconfig`) | [3.1](#31-configure) |
+| Wi-Fi setup | Phone → Wi-Fi `NightSentinel-Setup` / `sentinel123` → `http://192.168.4.1/` | [4.2](#42-connect-to-wi-fi-setup-page) |
+| Settings (fallback Wi-Fi, hotspot name) | `idf.py menuconfig` → Night Sentinel Wi-Fi, `S` to save | [3.1](#31-configure) |
+| Build / size | `idf.py build` · `idf.py size` | [3.2](#32-build) |
+| Flash + monitor 🔥 | `idf.py -p COM5 flash monitor` | [3.3](#33-flash-) |
+| Monitor only / exit | `idf.py -p COM5 monitor` · `Ctrl+]` | [2.2](#22-open-and-close-the-serial-monitor) |
+| Re-resolve components | `idf.py reconfigure` | [3.1](#31-configure) |
+| Live view / snapshot | `http://night-sentinel.local/` · `/snap.jpg` · stream `:81/stream` | [4.3](#43-view-the-camera-and-change-settings) |
+| IR / camera setting | `/control?var=ir&val=1` · state: `/status` | [4.3](#43-view-the-camera-and-change-settings) |
+| Save snapshots | `uv run grab_snaps.py night-sentinel.local -n 10` (in `tools\`, normal terminal) | [4.3](#43-view-the-camera-and-change-settings) |
+| Day 3 captures | `uv run capture_set.py tune --ir on` · `snap --set night --label person --dist 3` · `light --lux N` | [tools/README.md](../tools/README.md) |
+| Find the board's IP | `arp -a` → `28-84-85-5c-6c-cc` | [4.3](#43-view-the-camera-and-change-settings) |
+| Laptop's Wi-Fi / nearby networks | `netsh wlan show interfaces` · `netsh wlan show networks mode=bssid` | [4.2](#42-connect-to-wi-fi-setup-page) |
+| Check config values | `Select-String -Path sdkconfig -Pattern "SPIRAM_MODE\|FLASHSIZE\|NS_WIFI_SSID\|NS_PORTAL"` | [3.1](#31-configure) |
 
-The current `app_main.c` log line uses `%lld` for an `int64_t` expression, `%d` for `int`, and `%zu` for `size_t`. Those all match this compiler.
+---
+
+## Appendix A. Pins
+
+Every GPIO the firmware uses is defined in [`components/board/include/board_pins.h`](../components/board/include/board_pins.h); add new pins there first. Pins were checked against DFRobot's example code, then the DFRobot wiki, then schematic v1.1.
+
+**In the firmware** ✅
+
+| Function | GPIO | `board_pins.h` | Notes |
+|---|---|---|---|
+| Status LED | 3 | `PIN_STATUS_LED` | Active-high. Power LED D8 is hard-wired to 3.3 V |
+| IR LEDs | 47 | `PIN_IR_LED` | `IR_CTL` → EN of the SY7200A LED driver (U2), active-high. For dimming use LEDC **timer 1 / channel 1** |
+| Camera | see below | `PIN_CAM_*` | From DFRobot [`5_3.ino`](https://github.com/DFRobot/DFR1154_Examples/blob/master/5.3%20CameraWebServer/source%20code/5_3/5_3.ino) lines 5–22 |
+| Light sensor LTR-308 | shares SCCB 8 / 9 | `PIN_CAM_SIOD/SIOC` | I2C address **0x53**, part ID 0xB1. Driver `components/camera/light.c` (gain 9×, 100 ms, 18-bit). Safe to read while the camera runs ✅ 2026-11-06 |
+
+| Camera signal | GPIO | `camera_config_t` field | Arduino name |
+|---|---|---|---|
+| PWDN / RESET | −1 / −1 (not connected) | `pin_pwdn` / `pin_reset` | `PWDN_` / `RESET_GPIO_NUM` |
+| XCLK | 5 | `pin_xclk` | `XCLK_GPIO_NUM` |
+| SCCB SDA / SCL | 8 / 9 | `pin_sccb_sda` / `pin_sccb_scl` | `SIOD_` / `SIOC_GPIO_NUM` |
+| D0 – D7 | 16, 18, 21, 17, 14, 7, 6, 4 | `pin_d0` – `pin_d7` | **`Y2` – `Y9`** (offset by two) |
+| VSYNC / HREF / PCLK | 1 / 2 / 15 | `pin_vsync` / `pin_href` / `pin_pclk` | `VSYNC_` / `HREF_` / `PCLK_GPIO_NUM` |
+
+The camera's XCLK uses **LEDC timer 0 / channel 0**; nothing else may use them. The SCCB bus is **I2C port 1** with the new `i2c_master` driver (`CONFIG_SCCB_HARDWARE_I2C_DRIVER_NEW`). Other code on that bus must borrow its handle (`i2c_master_get_bus_handle(1, ...)`): mixing in the legacy I2C driver aborts at boot.
+
+**Not in the firmware yet** (from DFRobot examples and wiki) ⏳
+
+| Function | GPIO | Notes |
+|---|---|---|
+| microSD (SPI) | CS 10 · MOSI 11 · MISO 13 · SCK 12 | Day 9 |
+| Speaker amp MAX98357 (I2S) | BCLK 45 · WS 46 · DOUT 42 | Day 7; no amp-enable pin in any example |
+| Microphone (PDM) | CLK 38 · DATA 39 | not planned |
+| BOOT button / Gravity UART | 0 / TX 43, RX 44 | |
+
+**Avoid:** 19, 20 (USB D−/D+, the flashing port) · 26–32 (SPI flash) · 33–37 (octal PSRAM) · 0, 3, 45, 46 are **strapping pins**: no extra pull-ups or pull-downs.
+
+## Appendix B. Camera configuration
+
+Every camera setting the project uses: what it means, what it does, the value chosen and why. Code: `ns_cam_init()` in `components/camera/camera.c` (applied at every boot) and `/control` in `components/debug_http/debug_http.c` (changed live, lost at reboot). ✅ = verified on this board.
+
+### B.1 Driver start-up settings (`camera_config_t`)
+
+Passed once to `esp_camera_init()`. Changing any of them needs a reflash.
+
+| Field | Value | Meaning | Why this value |
+|---|---|---|---|
+| `pin_pwdn`, `pin_reset` | −1, −1 | Power-down and reset pins | Not wired on the DFR1154; the driver resets the sensor over I2C instead |
+| `pin_xclk` | 5 | Clock the ESP32 sends to the sensor | DFRobot pin map ([Appendix A](#appendix-a-pins)) |
+| `pin_sccb_sda`, `pin_sccb_scl` | 8, 9 | SCCB = the camera's I2C control bus (register reads/writes) | Pin map. The LTR-308 light sensor shares it |
+| `pin_d0`–`pin_d7` | 16, 18, 21, 17, 14, 7, 6, 4 | 8-bit parallel pixel data | Pin map (`Y2`–`Y9` in Arduino sketches) |
+| `pin_vsync`, `pin_href`, `pin_pclk` | 1, 2, 15 | Frame start, line valid, pixel clock | Pin map |
+| `xclk_freq_hz` | 20 MHz | Input clock to the sensor | DFRobot's value. The sensor's own PLL then sets the real speed (B.2) |
+| `ledc_timer`, `ledc_channel` | timer 0, channel 0 | ESP32 PWM unit that generates XCLK | Reserved for the camera: nothing else (e.g. IR dimming) may use them |
+| `pixel_format` | `PIXFORMAT_RGB565` | 2 bytes per pixel, uncompressed colour | The pedestrian detector accepts RGB565 directly, so no conversion. Byte order is big-endian (`RRRRRGGG GGGBBBBB`) |
+| `frame_size` | `FRAMESIZE_QVGA` | 320×240 = 153,600 bytes per frame | The model resizes to 224×224 anyway; bigger frames cost speed and memory |
+| `jpeg_quality` | 12 | JPEG quality (0–63, lower = better) | Unused for RGB565; the driver needs a value. Snapshots/stream use quality 80 in `frame2jpg` |
+| `fb_count` | 2 | Number of frame buffers | One fills while the other is processed |
+| `fb_location` | `CAMERA_FB_IN_PSRAM` | Where frame buffers live | 2 × 150 KB doesn't fit in internal RAM |
+| `grab_mode` | `CAMERA_GRAB_LATEST` | What `esp_camera_fb_get()` returns | Always the newest frame, never a stale queued one |
+
+### B.2 Sensor settings applied at boot (`ns_cam_init()`)
+
+Written to the OV3660 right after `esp_camera_init()`.
+
+| Setting | Code / registers | What it does | Value and reason |
+|---|---|---|---|
+| Vertical flip | `s->set_vflip(s, 1)` | Flips the image upside down | The sensor is mounted upside down on this board ✅ |
+| Sensor clocks | `s->set_pll(s, 0, 12, 1, 0, 0, 2, 1, 4)` | Sets the sensor's internal clock (SYSCLK) and pixel clock (PCLK). Args: `bypass, multiplier, sys_div, root_2x, pre_div, seld5, pclk_manual, pclk_div` | SYSCLK 30 / PCLK 15 MHz → **16.6 fps** ✅ (driver default 20/10 MHz = 5.5 fps; 40/20 drops half the frames; 40/10 gives none). One frame = 2300 × 783 clocks; one line = **76.7 µs** (`NS_CAM_LINE_US`) |
+| Anti-flicker band | `0x3a08/09` = 130, `0x3a0e` = 6 (50 Hz); `0x3a0a/0b` = 109, `0x3a0d` = 7 (60 Hz) | Mains lights pulse at 100/120 Hz; exposure is kept to whole 10 ms (8.3 ms) "bands" so frames don't flicker | Band = 10 ms / 76.7 µs = 130 lines. **Recalculate if the clocks change** ✅ |
+| Gain ceiling | `ns_cam_set_gain_ceiling(16)` → `0x3a18/19` = 256 | Highest amplification auto-exposure may use | **16×** (driver default 15×). Day 3: 32× and 63× made the picture no brighter, since the sensor's real gain tops out near 16× ✅. Don't use the driver's `set_gainceiling()`: on the OV3660 it writes the wrong units (16× request → 0.19×) |
+| Night mode (AEC2) | `s->set_aec2(s, 0)` → `0x3a00` bit 2 | Lets the sensor stretch frames up to 3× (max in `0x3a14/15` = 2352 lines = 180 ms) when still too dark at full gain | **Off at boot.** It's the only setting that adds real detail at night (luma 21 → 43 at 0.1 lux), but it costs ~2/3 of the frame rate (5.5 fps), and with it on the sensor kept 180 ms even at 18 lux room light ✅. Turn it on with the IR LEDs when dark |
+
+Defaults left from the driver: auto gain on, auto exposure on, AE level 0, brightness 0, contrast 0, no special effect, auto white balance on, 50 Hz anti-flicker mode.
+
+### B.3 Live settings (`/control?var=NAME&val=N`)
+
+Also on the page at `http://night-sentinel.local/`. Applied immediately, lost at reboot. Auto-exposure needs 1–2 s to settle after a change. Read the current state with `/status`.
+
+| `var` | Range (boot value) | What it does | Day 3 night result (0.1 lux, IR on) |
+|---|---|---|---|
+| `ir` | 0/1 (0) | IR LEDs on GPIO47 (940 nm) | Needed at night; in room light it cut gain 8.6× → 1.25× |
+| `gainceiling` | 1–63× (16) | Maximum auto gain (B.2) | 15× → 63×: luma 21 → 29 only. Keep 16 |
+| `aec2` | 0/1 (0) | Night mode (B.2) | Luma 21 → 43, real detail, but 180 ms exposure ≈ 5.5 fps and motion blur |
+| `ae_level` | −2..2 (0) | Brightness target auto-exposure aims for | No effect at night (AE already at its limits). Leave 0 |
+| `brightness` | −2..2 (0) | Adds an offset to every pixel after capture | Luma 21 → 45, but it only lifts black to grey: no new detail, more visible noise. Leave 0 |
+| `contrast` | −2..2 (0) | Stretches the dark/light difference after capture | Not tested |
+| `special_effect` | 0–6 (0) | Image effect after capture; **2 = greyscale** (others: negative, sepia, …) | Greyscale removes the purple IR tint, slightly darker (luma 17). Whether the detector prefers it is a Day 4 question |
+| `gain_ctrl` | 0/1 (1) | 1 = auto gain, 0 = fixed gain from `agc_gain` | Leave auto |
+| `exposure_ctrl` | 0/1 (1) | 1 = auto exposure, 0 = fixed exposure from `aec_value` | Leave auto |
+| `agc_gain` | 0–64 | Fixed gain, only with `gain_ctrl=0` | For experiments |
+| `aec_value` | 0–1200 | Fixed exposure, only with `exposure_ctrl=0` | For experiments |
+
+### B.4 Registers reference
+
+Read or write any of these live with `GET /reg?addr=0x3a14[&val=0x06]` (debug endpoint, lost at reboot).
+
+| Register | Meaning | Notes |
+|---|---|---|
+| `0x300a/0x300b` | Chip ID | Always 0x36 0x60; the bus test uses it to detect I2C corruption |
+| `0x3008` | System control | Bit 7 software reset; bit 6 **software power-down** (0x42 = camera stopped, 0x02 = running) ✅ |
+| `0x3500–0x3502` | Current exposure | Lines = value >> 4; × 76.7 µs = time. Read by `ns_cam_read_ae` |
+| `0x350a/0x350b` | Current gain | 10 bits in 1/16 steps (16 = 1×). Read by `ns_cam_read_ae` |
+| `0x3a00` | AEC control | Bit 2 = night mode (0x3a off, 0x3e on) ✅ |
+| `0x3a02/03`, `0x3a14/15` | Night-mode max exposure, 60 / 50 Hz | Default 0x0930 = 2352 lines (3 frames, 180 ms) ✅. A 2-frame cap (0x061E) can be written; whether the sensor obeys it in the dark is untested |
+| `0x3a08–0x3a0e` | Anti-flicker band | See B.2 |
+| `0x3a18/19` | Gain ceiling | 1/16 steps (16× = 256). Driver default 0x00F8 = 15×; project sets 16× |
+| `0x380e/0x380f` | Frame length (lines) | 783 at QVGA with these clocks |
+
+### B.5 Light sensor (LTR-308, `components/camera/light.c`)
+
+| Setting | Value | Meaning / reason |
+|---|---|---|
+| I2C address | 0x53 on the camera bus | Part ID register 0x06 reads 0xB1 ✅ |
+| `ALS_MEAS_RATE` (0x04) | 0x22 | 18-bit result, 100 ms per measurement (chip default) |
+| `ALS_GAIN` (0x05) | 3 = 9× | 0.067 lux per count, saturates near 17,000 lux: fine indoors and at night |
+| `MAIN_CTRL` (0x00) | 0x02 | Start measuring |
+| Lux formula | 0.6 × counts / (gain × integration factor) | From the datasheet |
+
+It barely sees the 940 nm IR LEDs (34 → 37 lux when IR came on), so it's the day/night signal. Frame brightness can't be used for that: auto-exposure keeps it flat.
+
+### B.6 Related `sdkconfig` options
+
+| Option | Value | Meaning / reason |
+|---|---|---|
+| `CONFIG_CAMERA_CORE1` | y | The driver's frame-copy task runs on core 1, away from Wi-Fi on core 0 |
+| `CONFIG_CAMERA_PSRAM_DMA` | **not set** | Would stop the `FB-SIZE` drops, but lets corrupted frames through ([issues log](issues_log.md)) |
+| `CONFIG_SPIRAM_SPEED_80M` | y | PSRAM at 80 MHz halves frame drops while streaming |
+| `CONFIG_SCCB_HARDWARE_I2C_DRIVER_NEW`, `..._PORT1` | y | Camera bus uses the new `i2c_master` driver on port 1. Other code on the bus must borrow its handle; mixing in the legacy driver aborts at boot |
+| `CONFIG_SCCB_CLK_FREQ` | 100000 | Camera bus at 100 kHz |
+| `CONFIG_CAMERA_DMA_BUFFER_SIZE_MAX` | 32768 | DMA chunk size (driver default) |
+
+### B.7 Measurements
+
+- Capture: **16.6 fps**, 0 NULL and 0 short frames in 1,000 (Wi-Fi off, 2026-10-23); PSRAM free 8,077,692 bytes before and after. On 2026-11-06 at ~35 lux, only 11.4 fps; open, see the [issues log](issues_log.md).
+- Night sweep and settings comparison: [notes.md](notes.md), `test-results/day3/tune-20261106-140725/`.
+
+## Appendix C. Other firmware flashed to this board
+
+| Firmware | How | Result |
+|---|---|---|
+| ESP-IDF `hello_world` (toolchain smoke test) | `Copy-Item "$env:IDF_PATH\examples\get-started\hello_world" D:\Projects\hello_world -Recurse`, then in it `idf.py set-target esp32s3`, `idf.py build`, `idf.py -p COM5 flash monitor` | ✅ `esp32s3 chip with 2 CPU core(s) ... silicon revision v0.2`. Its default 2 MB flash setting gives `Detected size(16384k) larger than ...`; set 16 MB in menuconfig. To enable PSRAM there, add `esp_psram` to `PRIV_REQUIRES` in its `main/CMakeLists.txt` first (`MINIMAL_BUILD` hides the menu) |
+| esp-dl `pedestrian_detect` (decided ESP-IDF v6.1) | In a scratch folder: `idf.py create-project-from-example "espressif/esp-dl:pedestrian_detect"`, `cd pedestrian_detect`, `idf.py set-target esp32s3`, `idf.py build`, `idf.py -p COM5 flash monitor` | ✅ 2026-10-04: 3 boxes, scores 0.884 / 0.879 / 0.786 (reference 0.884 / 0.884 / 0.805), ~130 ms. Uses a built-in JPEG, not the camera. App ~2.7 MB. esp-dl 3.3.x, pedestrian_detect 0.3.2 |
+| DFRobot CameraWebServer prebuilt `.bin` ([DFR1154_Examples](https://github.com/DFRobot/DFR1154_Examples)) | ⏳ flashing method and offsets weren't recorded | ✅ stream worked |
+
+Flash the project again afterwards with [3.3](#33-flash-).
+
+## Appendix D. C types on the ESP32-S3
+
+Checked against the v6.1 headers and `xtensa-esp32s3-elf-gcc`. The points that matter in this project's code:
+
+| Type | On this chip | Use in `ESP_LOGx` |
+|---|---|---|
+| `char` | **unsigned** by default; use `int8_t` for signed bytes | |
+| `int`, `long`, pointer, `size_t` | all 4 bytes | `%d`, `%ld`, `%p`, `%zu` |
+| `int32_t` / `uint32_t` | **`long`**, not `int` | `%ld` / `%lu`, or `"%" PRId32` / `"%" PRIu32` (`<inttypes.h>`) |
+| `int64_t` (e.g. `esp_timer_get_time()`, µs since boot) | `long long` | `%lld` |
+| `float` / `double` | hardware FPU is single-precision; `double` is software and slower | `%f` |
+| `esp_err_t` | `int`; `ESP_OK` = 0 | `%s` with `esp_err_to_name(err)` |
+| `TickType_t` | `uint32_t`, 1 tick = 10 ms (`CONFIG_FREERTOS_HZ=100`) | use `pdMS_TO_TICKS(ms)` |
+
+Camera driver types (esp32-camera 2.1.8): `camera_config_t` (pins are `int`, −1 = not connected), `camera_fb_t` (`buf`, `len`, `width`, `height`, `format`, `timestamp`), `sensor_t` (function pointers, called as `s->set_vflip(s, 1)`). Unit-test note ⏳: `gpio_get_level()` reads 0 on an output-only pin, so use `GPIO_MODE_INPUT_OUTPUT` or `gpio_dump_io_configuration()`.
+
+## Still to confirm ⏳
+
+- Exact EIM GUI options; whether a fresh clone + setup reproduces everything above.
+- How the DFRobot CameraWebServer `.bin` was flashed.
+- `erase-flash`, `flash-id`, raw `esptool write-flash`, monitor reset shortcut, VIN power, VLC live view: never run here.
+- Power consumption.
+- Why capture runs at 11.4 fps at ~35 lux, versus 16.6 fps on Day 2 (Day 5).

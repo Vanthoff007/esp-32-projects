@@ -1,4 +1,5 @@
-﻿#include "esp_log.h"
+#include "esp_log.h"
+#include "driver/i2c_master.h"
 #include "board_pins.h"
 #include "camera.h"
 
@@ -80,6 +81,17 @@ esp_err_t ns_cam_init(void)
     s->set_reg(s, 0x3a0b, 0xff, 109 & 0xff);  // 60 Hz band step, low byte
     s->set_reg(s, 0x3a0d, 0xff, 7);           // 60 Hz max bands per frame
 
+    // Night defaults, from the Day 3 sweep at 0.1 lux with IR on (docs/notes.md, 2026-11-06).
+    // Gain ceiling 16x: the driver's default is 15x, and raising it to 32x or 63x made the
+    // picture no brighter (the sensor's real gain tops out near 16x).
+    ns_cam_set_gain_ceiling(16);
+    // Night mode (the driver calls it AEC2) stays OFF here. It lets the sensor stretch frames
+    // up to 3x (180 ms exposure, ~5.5 fps) and was the only setting that added real detail at
+    // night. But with it on, the sensor also kept 180 ms at 18 lux room light (gain 3.4x,
+    // measured 2026-11-06), so it would cost ~2/3 of the frame rate in daylight too.
+    // Turn it on together with IR when it's dark: s->set_aec2(s, 1), or /control?var=aec2&val=1.
+    s->set_aec2(s, 0);
+
     ESP_LOGI(TAG, "camera ready (sensor PID 0x%x)", s->id.PID);
     return ESP_OK;
 }
@@ -92,4 +104,112 @@ camera_fb_t *ns_cam_grab(void)
 void ns_cam_release(camera_fb_t *fb)
 {
     esp_camera_fb_return(fb);
+}
+
+float ns_cam_mean_luma(const camera_fb_t *fb)
+{
+    if (fb->format != PIXFORMAT_RGB565) {
+        return -1;
+    }
+    // Each pixel is 2 bytes, high byte first: RRRRRGGG GGGBBBBB
+    // (same order the driver's own RGB565 -> BMP conversion uses).
+    const uint8_t *p = fb->buf;
+    size_t pixels = fb->len / 2;
+    uint32_t sum = 0;
+    uint32_t count = 0;
+    for (size_t i = 0; i < pixels; i += 4) {
+        uint16_t px = (p[2 * i] << 8) | p[2 * i + 1];
+        int r = ((px >> 11) & 0x1f) << 3;   // 5 bits -> 0..248
+        int g = ((px >> 5) & 0x3f) << 2;    // 6 bits -> 0..252
+        int b = (px & 0x1f) << 3;
+        sum += (77 * r + 150 * g + 29 * b) >> 8;   // standard luma weights, scaled by 256
+        count++;
+    }
+    return count ? (float)sum / count : 0;
+}
+
+void ns_cam_read_ae(float *gain, int *exposure_lines)
+{
+    sensor_t *s = esp_camera_sensor_get();
+    // Gain: 10-bit value in 1/16 steps, in 0x350a (top 2 bits) + 0x350b.
+    int gain_x16 = (s->get_reg(s, 0x350a, 0x03) << 8) | s->get_reg(s, 0x350b, 0xff);
+    *gain = gain_x16 / 16.0f;
+    // Exposure: 0x3500-0x3502, the lowest 4 bits are fractions of a line (dropped).
+    // Same decoding as get_aec_value() in the driver's sensors/ov3660.c.
+    *exposure_lines = (s->get_reg(s, 0x3500, 0x0f) << 12) |
+                      (s->get_reg(s, 0x3501, 0xff) << 4) |
+                      (s->get_reg(s, 0x3502, 0xf0) >> 4);
+}
+
+// Gain ceiling lives in 0x3a18 (top 2 bits) + 0x3a19, in 1/16 steps, so 16x = 256.
+// The driver's set_gainceiling() writes its enum (GAINCEILING_16X = 3) here unscaled,
+// which would mean a ceiling of 3/16 = 0.19x.
+esp_err_t ns_cam_set_gain_ceiling(int times)
+{
+    if (times < 1 || times > 63) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    int v = times * 16;
+    sensor_t *s = esp_camera_sensor_get();
+    int err = s->set_reg(s, 0x3a18, 0xff, (v >> 8) & 0x03) |
+              s->set_reg(s, 0x3a19, 0xff, v & 0xff);
+    return err ? ESP_FAIL : ESP_OK;
+}
+
+int ns_cam_get_gain_ceiling(void)
+{
+    sensor_t *s = esp_camera_sensor_get();
+    int v = (s->get_reg(s, 0x3a18, 0x03) << 8) | s->get_reg(s, 0x3a19, 0xff);
+    return v / 16;
+}
+
+#if CONFIG_SCCB_HARDWARE_I2C_PORT1
+#define SCCB_PORT 1
+#else
+#define SCCB_PORT 0
+#endif
+
+#define LTR308_ADDR    0x53   // LTR-308ALS datasheet: 7-bit address 0x53
+#define LTR308_PART_ID 0x06   // register that holds the part ID
+
+void ns_cam_scan_bus(void)
+{
+    // The camera driver created this bus; borrow its handle instead of making a second one.
+    i2c_master_bus_handle_t bus;
+    if (i2c_master_get_bus_handle(SCCB_PORT, &bus) != ESP_OK) {
+        ESP_LOGW(TAG, "I2C scan: camera bus not found (call after ns_cam_init)");
+        return;
+    }
+    int found = 0;
+    for (uint16_t addr = 0x08; addr < 0x78; addr++) {
+        if (i2c_master_probe(bus, addr, 20) == ESP_OK) {
+            ESP_LOGI(TAG, "I2C scan: device at 0x%02x%s", addr,
+                     addr == 0x3c ? " (OV3660 camera)" : addr == LTR308_ADDR ? " (LTR-308 light sensor?)" : "");
+            found++;
+        }
+    }
+    ESP_LOGI(TAG, "I2C scan: %d device(s) on GPIO %d/%d", found, PIN_CAM_SIOD, PIN_CAM_SIOC);
+
+    if (i2c_master_probe(bus, LTR308_ADDR, 20) != ESP_OK) {
+        ESP_LOGW(TAG, "LTR-308 not found at 0x%02x: use frame brightness for day/night", LTR308_ADDR);
+        return;
+    }
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = LTR308_ADDR,
+        .scl_speed_hz = 100000,
+    };
+    i2c_master_dev_handle_t dev;
+    if (i2c_master_bus_add_device(bus, &dev_cfg, &dev) != ESP_OK) {
+        return;
+    }
+    uint8_t reg = LTR308_PART_ID;
+    uint8_t id = 0;
+    // Write the register number, then read one byte back: the usual I2C "read register".
+    if (i2c_master_transmit_receive(dev, &reg, 1, &id, 1, 50) == ESP_OK) {
+        ESP_LOGI(TAG, "LTR-308 part ID 0x%02x (datasheet says 0xB1)", id);
+    } else {
+        ESP_LOGW(TAG, "LTR-308 answered the probe but not the part-ID read");
+    }
+    i2c_master_bus_rm_device(dev);
 }

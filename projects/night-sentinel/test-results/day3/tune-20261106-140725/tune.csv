@@ -1,0 +1,11 @@
+step,changes,ir,als_lux,luma,gain,exposure_ms,exposure_lines,gainceiling,gain_ctrl,exposure_ctrl,aec2,ae_level,brightness,contrast,special_effect
+baseline,{},1,0.1,21.2,15.0,59.8,780,15,1,1,0,0,0,0,0
+ceiling_16x,"{""gainceiling"": 16}",1,0.1,26.5,16.0,59.8,780,16,1,1,0,0,0,0,0
+ceiling_32x,"{""gainceiling"": 32}",1,0.1,25.3,32.0,59.8,780,32,1,1,0,0,0,0,0
+ceiling_63x,"{""gainceiling"": 63}",1,0.1,28.6,63.0,59.8,780,63,1,1,0,0,0,0,0
+aec2_on,"{""aec2"": 1}",1,0.1,43.2,15.0,180.4,2352,15,1,1,1,0,0,0,0
+ae_level_+1,"{""ae_level"": 1}",1,0.1,21.9,15.0,59.8,780,15,1,1,0,1,0,0,0
+ae_level_+2,"{""ae_level"": 2}",1,0.1,23.0,15.0,59.8,780,15,1,1,0,2,0,0,0
+brightness_+1,"{""brightness"": 1}",1,0.1,44.5,15.0,59.8,780,15,1,1,0,0,1,0,0
+grey,"{""special_effect"": 2}",1,0.1,16.8,15.0,59.8,780,15,1,1,0,0,0,0,2
+combo,"{""gainceiling"": 32, ""aec2"": 1, ""ae_level"": 1, ""brightness"": 1}",1,0.1,68.7,32.0,180.4,2352,32,1,1,1,1,1,0,0

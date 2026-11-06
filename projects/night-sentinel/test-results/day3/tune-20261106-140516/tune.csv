@@ -1,0 +1,11 @@
+step,changes,ir,als_lux,luma,gain,exposure_ms,exposure_lines,gainceiling,gain_ctrl,exposure_ctrl,aec2,ae_level,brightness,contrast,special_effect
+baseline,{},1,8.2,138.5,1.75,10.0,130,15,1,1,0,0,0,0,0
+ceiling_16x,"{""gainceiling"": 16}",1,8.1,138.4,1.75,10.0,130,16,1,1,0,0,0,0,0
+ceiling_32x,"{""gainceiling"": 32}",1,8.1,138.5,1.75,10.0,130,32,1,1,0,0,0,0,0
+ceiling_63x,"{""gainceiling"": 63}",1,8.1,138.2,1.75,10.0,130,63,1,1,0,0,0,0,0
+aec2_on,"{""aec2"": 1}",1,8.1,138.4,1.75,10.0,130,15,1,1,1,0,0,0,0
+ae_level_+1,"{""ae_level"": 1}",1,8.2,144.8,1.94,10.0,130,15,1,1,0,1,0,0,0
+ae_level_+2,"{""ae_level"": 2}",1,8.1,155.5,1.12,19.9,260,15,1,1,0,2,0,0,0
+brightness_+1,"{""brightness"": 1}",1,8.1,149.4,1.62,10.0,130,15,1,1,0,0,1,0,0
+grey,"{""special_effect"": 2}",1,8.1,133.4,1.62,10.0,130,15,1,1,0,0,0,0,2
+combo,"{""gainceiling"": 32, ""aec2"": 1, ""ae_level"": 1, ""brightness"": 1}",1,8.2,158.5,1.88,10.0,130,32,1,1,1,1,1,0,0

@@ -54,3 +54,22 @@ uv run grab_snaps.py 192.168.1.22 -n 40 -t 2 -o ../test-results/day3
 ```
 
 While a `/stream` viewer (browser or VLC) is open, the board can't serve `/snap.jpg`, so close the viewer first.
+
+## capture_set.py (Day 3)
+
+Pulls snapshots from the board and saves each one together with the board's `/status`: IR state, frame brightness (`luma`, 0–255), sensor gain, exposure in ms, and the current settings. Standard library only, so `uv sync` isn't needed. The board address defaults to `night-sentinel.local`; pass `--host <IP>` if that name doesn't resolve.
+
+```bash
+# Night settings: one snapshot per setting, so you can compare them side by side
+uv run capture_set.py tune --ir on            # -> test-results/day3/tune-<time>/ + tune.csv
+
+# Labelled test set for Day 4 (3 images per call by default)
+uv run capture_set.py snap --set night --ir on --label person --dist 3 --pose facing --lux 0.5
+uv run capture_set.py snap --set night --label empty -n 10 --lux 0.5
+                                              # -> testdata/night/*.jpg + index.csv
+
+# Day/night signal: log brightness/gain/exposure next to a phone lux reading
+uv run capture_set.py light --lux 120         # -> test-results/day3/light.csv, Ctrl+C to stop
+```
+
+Settings can also be changed by hand from the page at `http://night-sentinel.local/`, or as `GET /control?var=NAME&val=N`. The names are `ir`, `gainceiling` (1–63×), `ae_level`, `brightness`, `contrast` (−2..2), `aec2`, `gain_ctrl`, `exposure_ctrl` (0/1), `special_effect` (2 = greyscale), `agc_gain`, and `aec_value`.

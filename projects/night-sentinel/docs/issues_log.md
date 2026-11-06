@@ -22,6 +22,54 @@ Related: setup and commands in [ESP32_SETUP_AND_COMMANDS.md](ESP32_SETUP_AND_COM
 
 ---
 
+## 2026-11-06
+
+### Night mode always on would slow the camera in daylight too
+- **Symptom:** with `set_aec2(s, 1)` in `ns_cam_init()`, `/status` in 18 lux room light showed exposure 180.4 ms at gain 3.4×, steady for 30 s. That's ~5.5 fps instead of ~16.
+- **Cause:** with night mode on, the sensor's auto-exposure uses the stretched frames in place of gain and keeps them while the picture looks right. When AEC2 was switched on live in the same light earlier, it stayed at 59.8 ms, so it depends on the starting state.
+- **Fix:** AEC2 is off at boot (gain ceiling 16× kept). It should switch on together with IR when the LTR-308 says it's dark.
+- **Status:** ✅ default fixed; automatic switching comes with the day/night logic
+
+### At night, a person at 2.5 m isn't recognisable (M2 not met)
+- **Symptom:** 0.1 lux, IR on, AEC2 (night mode) + gain ceiling 16x, 180 ms exposure. A person at ~1 m is clear, but at ~2.5 m they can't be picked out: three frames were first mislabelled as empty.
+- **Cause (likely):** not enough IR light reaches 2.5 m. Gain is already at its real limit (~16x) and exposure at the night-mode maximum (3 frames). The camera was also tilted up at the ceiling, so the person was near the bottom edge of the frame.
+- **Options:** re-aim the camera level and retest at 3 m; bounce IR off a lighter wall/floor; use greyscale; accept a shorter range and note it; an external 940 nm IR lamp. Day 4 will show whether the detector does better than the eye on these frames.
+- **Status:** 🟡 open; carried into Day 4
+
+### Is it safe to read the LTR-308 while the camera runs? (shared I2C bus)
+- **Concern:** the LTR-308 sits on the camera's SCCB lines (GPIO 8/9). Community firmware reported bus contention.
+- **Test:** `RUN_LIGHT_BUS_TEST` in `main/app_main.c`. A task grabs frames at full speed while the main task, 10× per second, reads lux plus the camera's chip ID (0x300a/0x300b) and its AE registers. That's far more I2C traffic than normal use (one read every 2–5 s). Run 1: 30 s camera only, then 30 s camera + I2C. Run 2: 10 s warm-up, then 20 s camera only, 30 s camera + I2C, 20 s camera only.
+- **Result:** both runs: 300 / 300 lux reads OK, 0 chip-ID mismatches, 0 NULL frames, no `FB-SIZE` drops during the phases. Frame rate with I2C: 15.8 and 13.6 fps; camera only: 11.1–11.4 fps.
+- **Why it works:** both devices use the same `i2c_master` bus handle (port 1), and the driver queues their transfers. `light.c` borrows the camera's bus handle instead of creating a second bus.
+- **Status:** ✅ safe. LTR-308 chosen as the day/night signal
+
+### Capture at 11.4 fps instead of 16.6 fps
+- **Symptom:** in the bus test (~35 lux room light), camera-only capture ran at 11.1–11.4 fps. Day 2's capture test gave 16.6 fps.
+- **Ruled out:** start-up settling (no change after a 10 s warm-up, or after the I2C phase); power management (`CONFIG_PM_ENABLE` off); I2C (the busy-bus phase was *faster*); register reads changing the sensor (the driver's `get_reg` only reads). The OV3660's night mode (0x3a00 bit 2) is off in the driver's init table.
+- **Note:** exposure sat at its maximum (780 lines = 59.8 ms, frame length 783), so the light level is a suspect.
+- **Status:** 🟡 open, not blocking (the detector needs ≥ 6 fps). Measure on Day 5
+
+### Wi-Fi never connects: reason 201
+- **Symptom:** `W (3845) wifi: disconnected (reason 201), reconnecting` repeats every ~2.4 s, then `E (16435) wifi: no IP after 15000 ms (still retrying in the background)`.
+- **Cause:** 201 = `WIFI_REASON_NO_AP_FOUND`. The scan found no AP named `Airtel_Connect`. It isn't a password or auth problem: those show as 15/204, and a security mismatch shows as 210/211. The same SSID worked on 2026-10-23 (IP 192.168.1.22), so the code and SSID are fine. Something changed on the router or radio side: router off or rebooted, 2.4 GHz band turned off or renamed, channel moved, or the board is too far away. The ESP32-S3 can only use 2.4 GHz.
+- **Found:** the laptop couldn't see `Airtel_Connect` either. It was on the `iPhone` hotspot (2.4 GHz, channel 6), so the router simply wasn't in range. The board was right.
+- **Fix:** a Wi-Fi setup page (`components/net/wifi_portal.c`). If the saved network fails, the board opens the hotspot `NightSentinel-Setup` (password `sentinel123`). The page at `http://192.168.4.1/` lists the networks the board can see. Pick one, type its password, and the board saves it to NVS once it has actually connected. While nobody is on the hotspot, the board retries the saved network every 60 s, which covers a router that was briefly off. Tested: the board falls back to the hotspot and its scan finds 4 networks. Joining a network from the page hasn't been tested yet.
+- **Follow-up:** a phone can't run its hotspot while it's joined to `NightSentinel-Setup`, so the hotspot never shows up in the list. Fix: the page now takes a typed network name, and the board retries the last typed login every 30 s while nobody is on the setup Wi-Fi. Setting up from the laptop also works, with no code change.
+- **Verified:** the board joined the iPhone hotspot (172.20.10.14) through the setup page and rejoins it from the saved login on every boot.
+- **Status:** ✅ fixed
+
+### `set_gainceiling()` sets the wrong ceiling on the OV3660
+- **Symptom:** found while reading the driver (`sensors/ov3660.c`), before it caused a problem.
+- **Cause:** the driver writes the enum value (`GAINCEILING_16X` = 3) straight into 0x3A18/0x3A19. Those registers count in 1/16 steps, so the ceiling becomes 3/16 = 0.19×. DFRobot's web-server slider passes the same raw 0–6 values.
+- **Fix:** `ns_cam_set_gain_ceiling(times)` in `components/camera/camera.c` writes `times × 16`. `/control?var=gainceiling` uses it.
+- **Status:** ✅ worked around
+
+### `cam_hal: FB-SIZE: 138240 != 153600`
+- **Symptom:** one line in the log during the Wi-Fi retries.
+- **Cause:** QVGA RGB565 is 320×240×2 = 153600 bytes. This frame ended at 138240 bytes (216 of 240 lines), so it was cut short. The driver drops the frame and carries on.
+- **Fix:** none needed if it only happens now and then. Look into it if it shows up often.
+- **Status:** ℹ️ lesson only
+
 ## 2026-10-23: Day 2, camera capture
 
 ### Finding the board's IP after a restart
