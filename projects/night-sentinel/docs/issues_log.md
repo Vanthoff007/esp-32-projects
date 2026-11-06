@@ -224,13 +224,13 @@ The exact day of each entry below wasn't recorded. They come from the troublesho
 - **Status:** ✅ fixed
 
 ### `(od)` appeared in the ESP-IDF terminal prompt
-- **Cause:** VS Code's Python extension auto-activated the repo's `tools/` venv.
+- **Cause:** VS Code's Python extension auto-activated the repo's `tools/` venv (the tools package was then named `od`; it's now `night-sentinel-tools`).
 - **Fix:** use separate terminals for ESP-IDF and Python.
 - **Status:** ℹ️ practice adopted
 
-### `CMakeLists.txt not found in project directory D:\Projects\od`
+### `CMakeLists.txt not found in project directory <folder opened in VS Code>`
 - **Cause:** the extension ran Set Target on a folder that wasn't an ESP-IDF project yet.
-- **Fix:** open the project folder itself. `D:\Projects\od` now has a top-level `CMakeLists.txt`.
+- **Fix:** open the project folder itself, which has the top-level `CMakeLists.txt`. Since the move into ESP32 Projects, that's `projects/night-sentinel`, not the repository root.
 - **Status:** ✅ fixed
 
 ### `Your environment is not configured to handle Unicode characters`

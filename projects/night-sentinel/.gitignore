@@ -1,28 +1,17 @@
-# ESP-IDF
-build/
-sdkconfig
-sdkconfig.old
-managed_components/
+# Night Sentinel only. Shared rules (build/, sdkconfig, managed_components/,
+# .vscode/, .venv/, __pycache__/) are in the repository root .gitignore.
 
-# Python-generated files
-__pycache__/
-*.py[oc]
+# Python packaging output (tools/)
 dist/
 wheels/
 *.egg-info
 
-# Virtual environments
-.venv
-.vscode
-
-# tools/ outputs and model weights
+# tools/detect.py output and model weights
 output/
-image1.jpg
 models
-LICENSE
 *.pt
 
-# Docs
+# Local session notes
 docs/next_steps.md
 
 # Camera captures: keep local only

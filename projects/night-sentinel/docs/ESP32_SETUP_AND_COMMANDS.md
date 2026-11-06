@@ -81,7 +81,7 @@ ESP-IDF's variables (`IDF_PATH`, `PATH` additions, its Python venv) exist **only
   ```
 
 - **VS Code ESP-IDF extension** ✅
-  1. Open the project folder `D:\Projects\od` itself, since the extension acts on the open folder (a parent folder gives `CMakeLists.txt not found`).
+  1. Open the project folder `D:\Projects\esp32-projects\projects\night-sentinel` itself, since the extension acts on the open folder (a parent folder gives `CMakeLists.txt not found`).
   2. When asked for a setup, pick the existing **v6.1** at `C:\esp\v6.1\esp-idf`; don't download a second copy. (This writes `.vscode/settings.json`, which is git-ignored.)
   3. `Ctrl+Shift+P` → **ESP-IDF: Set Espressif Device Target** → **esp32s3** → **ESP32-S3 chip (via builtin USB-JTAG)**.
   4. `Ctrl+Shift+P` → **ESP-IDF: Open ESP-IDF Terminal**.
@@ -104,7 +104,7 @@ ESP-IDF's variables (`IDF_PATH`, `PATH` additions, its Python venv) exist **only
 |---|---|---|
 | `idf.py`, `cmake`, `ninja`, compiler "not found" | Finish the EIM install, then load the activation script | ✅ |
 | `sdkconfig ... generated for target 'esp32s3', but environment variable IDF_TARGET is set to 'esp32'` | The extension passed its default target. Set the target as in step 3 above and open a new terminal; for one terminal: `$env:IDF_TARGET = "esp32s3"`. **Don't** run `idf.py set-target esp32` | ✅ |
-| `(od)` in the ESP-IDF prompt | VS Code auto-activated the `tools/` venv. **Keep ESP-IDF and `tools/` in separate terminals.** To stop it per folder: `"python.terminal.activateEnvironment": false` in `.vscode/settings.json` ⏳ | ✅ |
+| `(night-sentinel-tools)` (or another venv name) in the ESP-IDF prompt | VS Code auto-activated the `tools/` venv. **Keep ESP-IDF and `tools/` in separate terminals.** To stop it per folder: `"python.terminal.activateEnvironment": false` in `.vscode/settings.json` ⏳ | ✅ |
 | Unicode warning persists | `setx` only affects new processes: restart VS Code completely. Per terminal: `chcp 65001` | ✅ |
 
 On a new machine or board, optionally confirm the toolchain with ESP-IDF's `hello_world` before building the project ([Appendix C](#appendix-c-other-firmware-flashed-to-this-board)). It needs the COM port from [step 2.1](#21-find-the-serial-port).
@@ -112,8 +112,11 @@ On a new machine or board, optionally confirm the toolchain with ESP-IDF's `hell
 ### 1.5 Get the project
 
 ```powershell
-git clone https://github.com/Vanthoff007/od.git D:\Projects\od   # ⏳ not re-run: the repo already existed here
+git clone https://github.com/Vanthoff007/esp-32-projects.git D:\Projects\esp32-projects
+cd D:\Projects\esp32-projects\projects\night-sentinel   # this project lives in projects/night-sentinel
 ```
+
+Night Sentinel is one project in the [ESP32 Projects](../../../README.md) repository. Paths below are relative to `projects/night-sentinel/`.
 
 | Path | Contents |
 |---|---|
@@ -128,14 +131,14 @@ git clone https://github.com/Vanthoff007/od.git D:\Projects\od   # ⏳ not re-ru
 | `tools/` | PC-side Python: `detect.py`, `grab_snaps.py`, `capture_set.py` (Day 3) |
 | `test-results/` | Saved snapshots, Day 3 tuning sweeps and light logs |
 | `testdata/` | Labelled day/night test images for Day 4 (`capture_set.py snap`), each set with an `index.csv` |
-| git-ignored | `build/`, `sdkconfig`, `sdkconfig.old`, `managed_components/`, `.vscode/`, `docs/next_steps.md` |
+| git-ignored | `build/`, `sdkconfig`, `sdkconfig.old`, `managed_components/`, `.vscode/` (repository `.gitignore`); `docs/next_steps.md`, camera images (project `.gitignore`) |
 
 ### 1.6 Python tools (optional, separate terminal)
 
 In a **normal** (non-IDF) terminal. Needs uv and Python ≥ 3.14:
 
 ```powershell
-cd D:\Projects\od\tools
+cd D:\Projects\esp32-projects\projects\night-sentinel\tools
 uv sync                     # creates tools\.venv from uv.lock
 uv run detect.py --help     # ✅ 2026-10-03 (ultralytics 8.4.143)
 ```
@@ -162,7 +165,7 @@ Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match "\(COM\d+\)" } |
 From the project folder, so crash addresses are decoded with `build\night-sentinel.elf`:
 
 ```powershell
-cd D:\Projects\od
+cd D:\Projects\esp32-projects\projects\night-sentinel
 idf.py -p COM5 monitor
 ```
 
@@ -182,7 +185,7 @@ idf.py -p COM5 monitor
 
 ## 3. Build and flash
 
-Run in an IDF terminal from `D:\Projects\od`.
+Run in an IDF terminal from `D:\Projects\esp32-projects\projects\night-sentinel`.
 
 ### 3.1 Configure
 
@@ -366,7 +369,7 @@ Two servers run so the stream doesn't block anything: **port 80** serves the pag
 | One snapshot | `http://night-sentinel.local/snap.jpg`; also works while a stream is open (HTTP 200 in 0.22 s) | ✅ |
 | Change one setting | `http://night-sentinel.local/control?var=ir&val=1` (names below); unknown name → HTTP 400 | ✅ |
 | Current state (JSON) | `http://night-sentinel.local/status`: `ir`, `als_lux` (LTR-308), `luma` (0–255), `gain`, `exposure_ms`, gain ceiling, settings | ✅ |
-| Save snapshots | `cd D:\Projects\od\tools` then `uv run grab_snaps.py night-sentinel.local -n 10` (`-t` interval, `-o` folder) → `test-results\day2\` | ✅ |
+| Save snapshots | `cd D:\Projects\esp32-projects\projects\night-sentinel\tools` then `uv run grab_snaps.py night-sentinel.local -n 10` (`-t` interval, `-o` folder) → `test-results\day2\` | ✅ |
 | Day 3 captures | `uv run capture_set.py tune --ir on` / `snap ...` / `light ...` ([tools/README.md](../tools/README.md)) | ⏳ |
 | IP without mDNS | `arp -a`, line with MAC `28-84-85-5c-6c-cc` (DHCP may change the IP; reserve it in the router to fix it) | ✅ |
 
@@ -417,7 +420,7 @@ Full history and measurements of every problem: [issues_log.md](issues_log.md).
 
 ## 5. Quick reference
 
-| Task | Command (IDF terminal, in `D:\Projects\od` unless noted) | Details |
+| Task | Command (IDF terminal, in `D:\Projects\esp32-projects\projects\night-sentinel` unless noted) | Details |
 |---|---|---|
 | Load ESP-IDF | `. "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"` | [1.4](#14-open-an-esp-idf-terminal) |
 | List COM ports | `[System.IO.Ports.SerialPort]::GetPortNames()` (any PowerShell) | [2.1](#21-find-the-serial-port) |
