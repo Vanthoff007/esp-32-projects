@@ -24,3 +24,7 @@ LICENSE
 
 # Docs
 docs/next_steps.md
+
+# Camera captures: keep local only
+testdata/**/*.jpg
+test-results/**/*.jpg
