@@ -1,4 +1,4 @@
-menu "Night Sentinel Wi-Fi"
+menu "Night Sentinel network"
 
     config NS_WIFI_SSID
         string "Wi-Fi SSID (optional fallback)"
@@ -27,5 +27,26 @@ menu "Night Sentinel Wi-Fi"
         help
             8+ characters for WPA2. Shorter (or empty) makes the hotspot open, so anyone
             nearby could see the home password you type into the page.
+
+    config NS_NTFY_SERVER
+        string "ntfy server"
+        default "https://ntfy.sh"
+        help
+            Phone push service. Install the ntfy app and subscribe to the topic below.
+
+    config NS_NTFY_TOPIC
+        string "ntfy topic (keep it secret)"
+        default ""
+        help
+            Anyone who knows the topic can read the alerts and photos, so use 20+ random
+            characters, e.g. ns-7f3kq9w2... It lives in sdkconfig, which is git-ignored.
+            Empty = no phone push (events are still spoken and saved to SD).
+
+    config NS_TZ
+        string "Time zone (POSIX TZ string)"
+        default "IST-5:30"
+        help
+            Used for event file names and timestamps. India: IST-5:30.
+            Central Europe: CET-1CEST,M3.5.0,M10.5.0/3.
 
 endmenu

@@ -17,3 +17,10 @@ docs/next_steps.md
 # Camera captures: keep local only
 testdata/**/*.jpg
 test-results/**/*.jpg
+
+# Downloaded datasets (images + labels): keep local only
+testdata/roboflow/
+
+# PC builds of host_test/ (tools/host_test.py) and raw serial logs (tools/serial_log.py)
+build_host/
+logs/

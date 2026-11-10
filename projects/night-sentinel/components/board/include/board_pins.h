@@ -23,3 +23,15 @@
 #define PIN_CAM_VSYNC    1
 #define PIN_CAM_HREF     2
 #define PIN_CAM_PCLK     15
+
+// MAX98357 speaker amplifier, I2S (DFR1154_Examples 5.2: setPins(45, 46, 42)).
+// 45 and 46 are strapping pins: don't add pull resistors.
+#define PIN_SPK_BCLK     45
+#define PIN_SPK_WS       46   // LRCLK
+#define PIN_SPK_DOUT     42
+
+// microSD card in SPI mode (DFR1154_Examples 6.9 / 6.10).
+#define PIN_SD_CS        10
+#define PIN_SD_MOSI      11
+#define PIN_SD_SCK       12
+#define PIN_SD_MISO      13

@@ -5,7 +5,10 @@ description = "PC-side tools for Night Sentinel: snapshot capture, night-setting
 readme = "README.md"
 requires-python = ">=3.14"
 dependencies = [
+    "matplotlib>=3.11.1",
     "numpy>=2.5.2",
     "opencv-python<5",
+    "pyserial>=3.5",
     "ultralytics>=8.4.143",
+    "ziglang>=0.17.1",
 ]

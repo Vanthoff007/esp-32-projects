@@ -215,7 +215,7 @@ Run in an IDF terminal from `D:\Projects\esp32-projects\projects\night-sentinel`
 
 3. **Wi-Fi**: nothing needs to be set at build time. On first boot, or whenever it can't join its network, the board opens a setup hotspot and you choose a network from your phone ([4.2](#42-connect-to-wi-fi-setup-page)).
 
-   Optional, in **`idf.py menuconfig` → Component config → Night Sentinel Wi-Fi** (`S` to save, `Esc` to exit):
+   Optional, in **`idf.py menuconfig` → Component config → Night Sentinel network** (`S` to save, `Esc` to exit):
 
    | Option | Default | Use |
    |---|---|---|
@@ -426,7 +426,7 @@ Full history and measurements of every problem: [issues_log.md](issues_log.md).
 | List COM ports | `[System.IO.Ports.SerialPort]::GetPortNames()` (any PowerShell) | [2.1](#21-find-the-serial-port) |
 | First-time config | `idf.py set-target esp32s3` (wipes `sdkconfig`) | [3.1](#31-configure) |
 | Wi-Fi setup | Phone → Wi-Fi `NightSentinel-Setup` / `sentinel123` → `http://192.168.4.1/` | [4.2](#42-connect-to-wi-fi-setup-page) |
-| Settings (fallback Wi-Fi, hotspot name) | `idf.py menuconfig` → Night Sentinel Wi-Fi, `S` to save | [3.1](#31-configure) |
+| Settings (fallback Wi-Fi, hotspot name) | `idf.py menuconfig` → Night Sentinel network, `S` to save | [3.1](#31-configure) |
 | Build / size | `idf.py build` · `idf.py size` | [3.2](#32-build) |
 | Flash + monitor 🔥 | `idf.py -p COM5 flash monitor` | [3.3](#33-flash-) |
 | Monitor only / exit | `idf.py -p COM5 monitor` · `Ctrl+]` | [2.2](#22-open-and-close-the-serial-monitor) |

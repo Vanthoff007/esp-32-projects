@@ -168,7 +168,7 @@ static void run_portal(const ns_wifi_creds_t *saved, bool have_saved, uint32_t t
     while (true) {
         ns_wifi_creds_t c;
         if (ns_portal_wait_creds(&c, RETRY_MS)) {
-            char msg[160];
+            char msg[256];   // SSID (32) + reason text + sentence; 160 tripped -Werror=format-truncation at -O2
             ns_portal_set_busy(true);
             snprintf(msg, sizeof(msg), "Trying \"%s\"...", c.ssid);
             ns_portal_set_status(msg);

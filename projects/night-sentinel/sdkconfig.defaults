@@ -20,3 +20,26 @@ CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
 
 # Camera DMA-copy task on core 1, away from Wi-Fi (core 0). Measured: no change in FB-SIZE drops (2026-10-23)
 CONFIG_CAMERA_CORE1=y
+
+# Detector speed settings, copied from esp-dl's pedestrian_detect sdkconfig.defaults.esp32s3 (Day 4).
+# The model streams its weights from PSRAM, so a bigger data cache with longer lines cuts stalls.
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+CONFIG_ESP32S3_DATA_CACHE_64KB=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
+
+# Watchdog (Day 10): the detect task registers itself; core 1's idle task is not watched,
+# because the detect loop keeps core 1 busy on purpose. 10 s covers the model's first run.
+CONFIG_ESP_TASK_WDT_TIMEOUT_S=10
+CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n
+
+# CPU use per task for /action?name=tasks (Day 5)
+CONFIG_FREERTOS_USE_TRACE_FACILITY=y
+CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
+CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS=y
+
+# Internal RAM (Day 8): with Wi-Fi + the model, an HTTPS push ran internal RAM down to 1.7 KB
+# and failed. Let TLS, Wi-Fi/lwIP buffers and mallocs above 4 KB use the 8 MB PSRAM instead.
+CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y
+CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096
+

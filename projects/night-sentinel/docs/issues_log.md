@@ -22,6 +22,106 @@ Related: setup and commands in [ESP32_SETUP_AND_COMMANDS.md](ESP32_SETUP_AND_COM
 
 ---
 
+## 2026-11-11
+
+### Event photo stamped in UTC right after a reboot
+- **Symptom:** `ev/E00015_20261110-184755.jpg` while the others were `..._20261111-0011xx` (IST).
+- **Cause:** the clock survives a software reset (RTC), but the time zone was only set in `ns_time_start()`, after Wi-Fi. An alert in the first seconds used UTC.
+- **Fix:** `setenv("TZ", CONFIG_NS_TZ)` + `tzset()` at the very start of `app_main`.
+- **Status:** ✅ fixed
+
+### NUL byte written into debug_http.c again
+- **Symptom:** `grep` reported "Binary file debug_http.c matches".
+- **Cause:** a Python helper wrote `'\\0'` inside a normal (non-raw) string, which became a real NUL byte in the C comment.
+- **Fix:** replaced it with text. Lesson: use raw strings or plain words for `\0` in generator scripts.
+- **Status:** ✅ fixed
+
+### `-Werror=format-truncation` in the new /sd handler
+- **Symptom:** `'%s' directive output may be truncated writing up to 255 bytes into a region of size 200`.
+- **Cause:** FAT long file names can be 255 bytes; the line buffers were 200/300.
+- **Fix:** buffers 300/420, static so they stay off the server task's stack.
+- **Status:** ✅ fixed
+
+## 2026-11-10
+
+### Detection drops to ~4 fps while the live view is open
+- **Symptom:** `T,frames=50,grab_ms=89.4,infer_ms=154.7,...,fps=4.08` with `http: stream: 2200 frames, 4.1 fps` in the log; normal is 7.9 fps, grab ~0 ms, infer 125 ms.
+- **Cause:** the browser live view (`/stream`) holds camera frame buffers while it JPEG-encodes them, so the detect task waits ~90 ms for a free frame; the encoding also competes for PSRAM bandwidth (model 125 → 155 ms).
+- **Fix:** none needed for deployment (debug server is off in the demo build). Close the live view during walk tests and FPS checks.
+- **Status:** ℹ️ lesson only
+
+### `gpio: conflict found for GPIO[10]` on every SD retry with no card
+- **Symptom:** every 30 s: `W gpio: conflict found for GPIO[10]`, `E sdmmc_sd: send_if_cond (1) returned 0x108`, `E vfs_fat_sdmmc: esp_vfs_fat_sdspi_sdcard_init failed (0x108)`.
+- **Cause:** no card inserted (0x108 = no response). The GPIO10 (SD CS) warning is the retry re-claiming a pin the failed attempt already configured.
+- **Fix:** harmless; goes away once a card is in. Possible tidy-up: release the CS pin after a failed mount.
+- **Status:** 🟡 open (cosmetic)
+
+### "Walked out and back, no new alert"
+- **Symptom:** a second walk-in soon after an alert gave no speaker/push.
+- **Cause:** by design: after the person is gone for 3 s the FSM goes ALERT_ACTIVE → COOLDOWN for 30 s (`S,2461394,ALERT_ACTIVE,COOLDOWN`); re-detection during cooldown is only logged. There's also a cap of 10 alerts per hour.
+- **Fix:** none. For walk tests wait > 30 s between walks; demo mode uses a 15 s cooldown.
+- **Status:** ℹ️ lesson only
+
+### Night detection fails beyond ~1 m (Day 4 no-go)
+- **Symptom:** night person frames at <= 4 m: 1/17 with a real box >= 0.5. The raw count looked like 9/17, but those were whole-frame boxes `(0,0)-(319,239)` that also appear on 13/20 empty frames.
+- **Cause:** the frames, not the model: at 0.1 lux the on-board IR lights a person well only to ~1 m. Image fixes (stretch, gamma, CLAHE, grey) didn't help, and pre-trained YOLO11n also found 0/18 people at 2.5 m+.
+- **Fix:** none in software. Owner's decision (10 Nov): a dim room light stays on (never fully dark) and the camera is mounted 1–1.5 m from the door. Full Roboflow NIR run (990 close-up images) on the board: 61 % of single frames accepted at 0.6, 75 % at 0.5. No training. Details in notes.md, "Day 4 night go/no-go".
+- **Status:** 🟡 worked around; confirm with walk-ins under the dim light
+
+### Board aborts when the COCO YOLO11n model loads
+- **Symptom:** `ESP_ERROR_CHECK failed: esp_err_t 0x101 (ESP_ERR_NO_MEM) ... func: phy_track_pll_init`, then `abort()` and a reboot, right after `FbsLoader: The partition size is 3072 KB`.
+- **Cause:** loading the 2.86 MB YOLO11n model made many small allocations in internal RAM, and Wi-Fi's next allocation failed.
+- **Fix:** the experiment was dropped (it also didn't detect people at night beyond 1 m, and needs ~1 s per frame); the COCO component and its flash partition were removed again.
+- **Status:** ✅ reverted
+
+### HTTPS push fails, internal RAM drops to 1.7 KB
+- **Symptom:** `/action?name=push_test` → `HTTP -1`; `/status` afterwards: `"free_int":6355,"min_int":1716`.
+- **Cause:** mbedTLS allocated its TLS buffers (~16 KB in + out) from internal RAM, which Wi-Fi, the camera DMA and the task stacks had already shrunk to ~47 KB.
+- **Fix:** in `sdkconfig.defaults`: `CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC=y` (TLS in PSRAM), `CONFIG_SPIRAM_TRY_ALLOCATE_WIFI_LWIP=y`, `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096`.
+- **Status:** ✅ fixed: retest gave `HTTP 200 in 5470 ms`, internal RAM back to ~46 KB after the push, and the message + `E00002.jpg` attachment were on the ntfy server
+
+### No SD card: `sdmmc_init_sd_if_cond ... returned 0x108`
+- **Symptom:** at boot `E sdmmc_sd: sdmmc_init_sd_if_cond: send_if_cond (1) returned 0x108`, then `storage: no SD card (ESP_ERR_INVALID_RESPONSE)`.
+- **Cause:** most likely no card in the slot (the card answered nothing valid).
+- **Fix:** none needed in firmware: storage keeps running without a card and retries the mount before each write (at most every 30 s). Insert a FAT32 card to test Day 9.
+- **Status:** 🟡 waiting for a card
+
+### Build: `this statement may fall through` in intrusion_fsm.c
+- **Symptom:** `intrusion_fsm.c:117:18: error: this statement may fall through [-Werror=implicit-fallthrough=]`.
+- **Cause:** a deliberate fall-through from `ST_CONFIRMED` into `ST_ALERT_ACTIVE` with only a comment; ESP-IDF builds with `-Werror`.
+- **Fix:** both cases share one label block (`case ST_CONFIRMED: case ST_ALERT_ACTIVE:`), no fall-through.
+- **Status:** ✅ fixed
+
+### Build: `-Werror=format-truncation` in wifi.c after switching to -O2
+- **Symptom:** `wifi.c:181:65: error: '. Retrying every 30 s while ...' directive output may be truncated writing 52 bytes into a region of size between 45 and 128`.
+- **Cause:** `CONFIG_COMPILER_OPTIMIZATION_PERF` (Day 4 speed settings) turns on deeper format checks; a 32-char SSID + reason text can overflow the 160-byte message.
+- **Fix:** message buffer 256 bytes.
+- **Status:** ✅ fixed
+
+### serial_log.py `--reset` didn't reset the board
+- **Symptom:** the log started at uptime 39 s instead of at boot.
+- **Cause:** on Windows (usbser.sys) an RTS change is only sent together with a DTR write.
+- **Fix:** write `port.dtr = port.dtr` after each RTS change, as esptool does.
+- **Status:** ✅ fixed
+
+### Detector self-test: one whole-frame box at 0.32 on an empty room
+- **Symptom:** `detector self-test: 1 box(es) ... score 0.32 box 0,0 - 319,239`, first frame after camera start.
+- **Cause:** model noise on an unsettled first frame; low score.
+- **Fix:** none needed: below `ACCEPT_SCORE` 0.60, and `MAX_BOX_AREA` 0.80 rejects whole-frame boxes anyway.
+- **Status:** ℹ️ lesson
+
+### Person runs saved as `empty`
+- **Symptom:** 3 of 4 night runs (person at 4.5 m facing, 3 m, 5 m side) were saved as `empty_*.jpg` with `label=empty` in `testdata/night/index.csv`.
+- **Cause:** the empty-room `snap` command was reused from the terminal history without changing `--label`/`--dist`/`--pose`.
+- **Fix:** renamed the 15 files to `person_<dist>m[_<pose>]_…` and corrected their `index.csv` rows. Before each `snap`, check the label matches the scene.
+- **Status:** ✅ fixed
+
+### VS Code: `command "create.espidfterminal" not found`
+- **Symptom:** **ESP-IDF: Open ESP-IDF Terminal** failed with `command "create.espidfterminal" not found`.
+- **Cause (likely):** VS Code was open on the repo root `D:\Projects\esp32-projects`, which isn't an ESP-IDF project after the 2026-11-06 move to the ESP32 Projects layout. The extension doesn't start there, so its commands don't exist.
+- **Fix:** open `projects/night-sentinel` itself as the folder (File → Open Folder), then run the command again. If it still fails: Developer: Reload Window, and check Output → ESP-IDF. Fallback that always works: `. "C:\Espressif\tools\Microsoft.v6.1.PowerShell_profile.ps1"` in any PowerShell.
+- **Status:** 🟡 cause not yet confirmed
+
 ## 2026-11-06
 
 ### First Wi-Fi connect after flashing times out (reason 2)

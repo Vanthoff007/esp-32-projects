@@ -1,0 +1,18 @@
+menu "Night Sentinel alerts"
+
+    config NS_AUDIO_ENABLED
+        bool "Speak the warning on the speaker"
+        default y
+        help
+            Turn off to test at night without waking the house. Detection, push and SD
+            evidence still work.
+
+    config NS_AUDIO_GAIN_PCT
+        int "Speaker volume, percent of the recorded level"
+        range 0 400
+        default 100
+        help
+            Above 100 the clip gets louder but its peaks start to clip. Lower it if the board
+            resets during playback (brown-out from IR LEDs + Wi-Fi + speaker together).
+
+endmenu

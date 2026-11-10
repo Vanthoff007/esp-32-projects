@@ -61,3 +61,48 @@ Live AE readout: gain = 0x350A[1:0]:0x350B / 16; exposure lines = 0x3500-0x3502 
 RGB565 frames are big-endian (high byte first: RRRRRGGG GGGBBBBB)
 Wi-Fi: login set from the setup page is saved in NVS namespace "ns_wifi". Setup hotspot
   "NightSentinel-Setup" / sentinel123, page http://192.168.4.1/. idf.py erase-flash clears the saved login
+
+## Day 4 night go/no-go (2026-11-10)
+
+Decision: **NO-GO for night detection beyond ~1 m with the on-board IR**, for any pre-trained model tried.
+Daylight / room light and close range (~1 m) at night are fine. Details: test-results/day4/ and docs/results.md.
+
+- Pedestrian Pico model, via POST /detect (same path as live frames: JPEG -> RGB565 BE -> model, threshold 0.3),
+  with the firmware's box filters (height >= 10 % of frame, area <= 80 %):
+  - night person frames at <= 4 m (17 images: 1, 2.5, 3 m), filtered box >= 0.5: **1/17 (6 %)**. Plan rule: < 50 % = no-go
+  - empty night frames (20): 0/20 with a filtered box >= 0.5 -> no false alarms
+  - Without the filters it looked like 9/17 (53 %), but those were **whole-frame boxes (0,0)-(319,239)**, which
+    the model also puts on 13/20 empty frames. They are noise on dark frames, not people
+  - Roboflow NIR CCTV frames (200, resized 320x240): 70 % with IoU >= 0.5 at 0.5. The model works on NIR when
+    the person is well lit and large in the frame
+- Image fixes before the model (grey, contrast stretch, gamma, median+stretch, CLAHE): none helped (0-1/17)
+- Pre-trained COCO YOLO11n (PC, imgsz 320, inference only): empty 0/20, 1 m 9/9, **2.5 m+ 0/18**.
+  On the board it would also cost ~1 s/frame and its loader ran internal RAM out (Wi-Fi abort, issues log). Not used
+- Cause: the frames themselves. At 0.1 lux the on-board 940 nm LEDs light a person well only to ~1 m
+  (Day 3 M2 gap). Software can't recover detail the sensor didn't capture
+- Ways forward (owner decides): (1) external IR illuminator (850 nm is brighter on this sensor; 940 nm is invisible),
+  (2) a low background light (night lamp) in the room, (3) mount closer to the entry point (~1-1.5 m coverage),
+  (4) train a night model (ESPDet-Pico) - not started, needs the owner's OK
+- **Owner's decision (10 Nov): (2) + (3).** A dim light stays on in the room (never fully dark) and the camera is
+  mounted 1-1.5 m from the door. No training, pre-trained Pico model only
+- Check on the full Roboflow "person by infrared camera" test+valid split (990 images, resized 320x240, through the board).
+  978/990 have the person >= 60 % of the frame height, i.e. like a 1-1.5 m mount:
+  - single frame with a firmware-accepted box (filters on, score >= 0.6, IoU >= 0.3 with the person): **61 %**
+  - filtered box >= 0.5: **75 %** (IoU >= 0.5: 75 %)
+  - the 80 % area cap drops no real close-up person (same numbers with no cap), so it stays: it only removes the
+    whole-frame noise boxes on dark frames
+  - with 3-of-5 confirmation, 61 % per frame is ~70 % per 5-frame window (if frames were independent), so someone who
+    stays 1-2 s in view should trigger. Day 11 sweep: try accept 0.5 if walk-ins miss
+  - results: test-results/day4/eval-20261110-084642-none/
+
+Byte order: live camera frames are RGB565 **big-endian** (esp32-camera to_jpg.cpp default, /snap.jpg colours correct);
+the detector uses DL_IMAGE_PIX_TYPE_RGB565BE.
+
+## Day 5 measurements (2026-11-10, room light ~80 lux, IR off)
+
+- Detection loop **7.9 fps** (grab 0-0.8 ms, model 125 ms, rest 0.6 ms per frame); detect task 95 % of core 1
+- At night with IR + AEC2 (night mode): **5.5 fps** (180 ms exposure caps the camera); 3/5 confirm = ~0.9 s
+- Model load 151 ms, first frame processed 0.8 s after boot
+- App 3.39 MB of the 6 MB partition (57 %). Free PSRAM ~7.0 MB while running
+- Internal RAM: ~47 KB free while running, minimum ~19-23 KB (Wi-Fi start-up). Plan target >= 40 KB minimum: not met,
+  but stable (no downward trend). TLS moved to PSRAM (CONFIG_MBEDTLS_EXTERNAL_MEM_ALLOC) after a push failure
