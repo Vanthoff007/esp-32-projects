@@ -1,0 +1,10 @@
+menu "Platform: web server"
+
+    config NS_STREAM_ENABLED
+        bool "Live video stream (port 81)"
+        default y
+        help
+            Off = the stream server is not started at all (saves a task and its memory).
+            With it on, the stream can still be switched off at runtime from the web page.
+
+endmenu

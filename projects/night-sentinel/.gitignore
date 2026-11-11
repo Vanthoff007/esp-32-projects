@@ -8,7 +8,7 @@ wheels/
 
 # tools/detect.py output and model weights
 output/
-models
+tools/models/
 *.pt
 
 # Local session notes

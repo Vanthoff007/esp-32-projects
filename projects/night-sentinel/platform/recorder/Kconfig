@@ -1,0 +1,60 @@
+menu "Platform: recorder"
+
+    config NS_REC_ENABLED
+        bool "Video recording to the SD card"
+        default y
+        help
+            Off = the recorder is compiled out. With it on, recording still only happens in
+            the mode chosen below or on the web page.
+
+    if NS_REC_ENABLED
+
+    choice NS_REC_BOOT_MODE
+        prompt "Recording at boot"
+        default NS_REC_BOOT_OFF
+        help
+            The mode after every reboot. It can be changed from the web page until the next
+            reboot.
+        config NS_REC_BOOT_OFF
+            bool "off"
+        config NS_REC_BOOT_CONTINUOUS
+            bool "continuous"
+        config NS_REC_BOOT_EVENT
+            bool "event clips"
+    endchoice
+
+    config NS_REC_FPS
+        int "Recorded frames per second (at most)"
+        range 1 15
+        default 5
+        help
+            A 320x240 frame is ~9 KB, so 5 fps is ~45 KB/s: about 160 MB per hour.
+
+    config NS_REC_SEGMENT_S
+        int "Continuous mode: seconds per file"
+        range 10 600
+        default 60
+        help
+            A power cut loses at most the file being written.
+
+    config NS_REC_PREROLL_S
+        int "Event clips: seconds kept from before the trigger"
+        range 0 5
+        default 3
+
+    config NS_REC_CLIP_S
+        int "Event clips: seconds recorded after the trigger"
+        range 2 60
+        default 10
+
+    config NS_REC_MIN_FREE_MB
+        int "Keep at least this many MB free on the card"
+        range 10 4096
+        default 100
+        help
+            Before a new file is started, the oldest recordings are deleted until this much
+            is free. Only files in /sdcard/rec are deleted.
+
+    endif
+
+endmenu

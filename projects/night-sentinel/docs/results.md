@@ -2,6 +2,25 @@
 
 Measured numbers against the plan's targets (plan section 10). Firmware 0.9.0, params `v1-start`. Dates are when each row was measured.
 
+## After the modular refactor (2026-11-11, firmware 0.10.0)
+
+Same board, same model, code split into `platform/`, `models/`, `app/`. Weights now come from the SD card.
+
+| Metric | Before (0.9.0) | After (0.10.0) | Note |
+|---|---|---|---|
+| Detection loop, room light | 7.9 fps | **8.0 fps** | unchanged |
+| Model time | 125.6 ms | **124.4 ms** | unchanged |
+| Night test set, per-image scores (`eval_detector.py --roboflow 0`) | 47 images | **47/47 identical** | same go/no-go: 1/17 |
+| Host unit tests | 12 tests, 33 checks | **12 tests, 33 checks, 0 failed** | |
+| App size | 3.57 MB | **3.15 MB** | the 435 KB of weights left the firmware |
+| Free internal RAM, running | ~42 KB | **~49 KB** | small allocations now go to PSRAM above 1 KB (was 4 KB) |
+| Free internal RAM, lowest | 18.9 KB | **11–14 KB** | lower; open item in the issues log |
+| Inference + continuous recording | not possible | **6.4 fps** (model 150 ms) | recorder writes 5 fps |
+| Inference + recording + live viewer | 4 fps (stream alone halved it) | **6.0 fps** | one JPEG encode shared, on core 0 |
+| Recording, inference off | not possible | 5.2 fps `.avi`, 214 of 214 frames decode on the PC | |
+| Event clip (3 s before + 10 s after) | not possible | 487 KB file written | |
+| Model missing from the card | n/a | boots, page names the missing file, LED blinks fast | |
+
 ## Performance and memory (Day 5, 2026-11-10)
 
 | Metric | Target | Measured | Status |

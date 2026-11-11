@@ -1,3 +1,0 @@
-## The detector is the only component that uses esp-dl, so it declares the model itself.
-dependencies:
-  espressif/pedestrian_detect: ^0.3.2

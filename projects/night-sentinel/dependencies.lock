@@ -24,7 +24,7 @@ dependencies:
       require: private
       version: '*'
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     targets:
     - esp32
@@ -65,7 +65,7 @@ dependencies:
     component_hash: e1e7e6991193c41ed6c9fc386702aa7821433319e7aa9c3147cd3236310cd69c
     dependencies: []
     source:
-      registry_url: https://components.espressif.com
+      registry_url: https://components.espressif.com/
       type: service
     targets:
     - esp32
@@ -90,26 +90,16 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.14.0
-  espressif/pedestrian_detect:
-    component_hash: 6afb7d8f06ec7ec94e2ee2ae1cff737be517e9ebbc6035a38e6e9783bafd4910
-    dependencies:
-    - name: espressif/esp-dl
-      registry_url: https://components.espressif.com
-      require: private
-      version: ~3.3.14
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    version: 0.3.3
   idf:
     source:
       type: idf
     version: 6.1.0
 direct_dependencies:
+- espressif/esp-dl
 - espressif/esp32-camera
+- espressif/esp_new_jpeg
 - espressif/mdns
-- espressif/pedestrian_detect
 - idf
-manifest_hash: e374c0c2569a2e65f059a9fe89115636affad2ac182d5d3068267242ef8123f5
+manifest_hash: 14888566207c709ada985e3293cd3f5ab52380bfcda1aacd7067f337baf4dfab
 target: esp32s3
 version: 3.0.0

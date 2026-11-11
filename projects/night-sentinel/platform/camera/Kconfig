@@ -1,0 +1,32 @@
+menu "Platform: camera and IR"
+
+    choice NS_IR_MODE
+        prompt "IR LEDs at boot"
+        default NS_IR_AUTO
+        config NS_IR_AUTO
+            bool "automatic, from the light sensor (with hysteresis)"
+        config NS_IR_ALWAYS_ON
+            bool "always on"
+        config NS_IR_ALWAYS_OFF
+            bool "always off (control tests)"
+    endchoice
+
+    config NS_IR_ON_BELOW_LUX
+        int "Automatic IR: turn on below this many lux"
+        default 3
+        help
+            The LTR-308 read 0.1 lux in the dark test room and ~35-85 lux with room light.
+            The IR LEDs themselves barely change the reading, so they can't fool the switch.
+
+    config NS_IR_OFF_ABOVE_LUX
+        int "Automatic IR: turn off above this many lux"
+        default 10
+        help
+            Must be well above the "on" level, so the IR doesn't flicker on and off at dusk.
+
+    config NS_JPEG_QUALITY
+        int "JPEG quality for snapshots, live stream and recordings (1-100)"
+        range 10 100
+        default 80
+
+endmenu

@@ -2,7 +2,7 @@
 
 Uses Windows' built-in speech engine (System.Speech, through PowerShell) to write a
 16 kHz / 16-bit / mono WAV, then strips the WAV header so only raw samples are left:
-  components/alerts/assets/warn.pcm   (embedded in the firmware with EMBED_FILES)
+  platform/alerts/assets/warn.pcm   (embedded in the firmware with EMBED_FILES)
 
   uv run make_audio.py
   uv run make_audio.py --text "Warning. Person detected." --rate 0
@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-OUT = REPO / "components" / "alerts" / "assets" / "warn.pcm"
+OUT = REPO / "platform" / "alerts" / "assets" / "warn.pcm"
 DEFAULT_TEXT = "Warning. Person detected. You are being recorded."
 
 PS_SCRIPT = r"""

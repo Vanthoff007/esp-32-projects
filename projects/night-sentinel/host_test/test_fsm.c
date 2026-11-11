@@ -1,5 +1,5 @@
 // Host unit tests for the intrusion state machine (Day 6). Built and run on the PC by
-// tools/host_test.py; compiles components/intrusion/intrusion_fsm.c unchanged.
+// tools/host_test.py; compiles app/intrusion/intrusion_fsm.c unchanged.
 // Each test feeds a scripted sequence of frames at 7 fps (143 ms apart) and checks the result.
 #include <stdio.h>
 #include <stdlib.h>

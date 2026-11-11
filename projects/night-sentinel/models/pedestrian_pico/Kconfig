@@ -1,0 +1,28 @@
+# 1. Add this model to the "Model" list (menuconfig -> Platform: inference).
+choice NS_MODEL # ignore: multiple-definition
+    config NS_MODEL_PEDESTRIAN_PICO
+        bool "pedestrian_pico: person detector, ESP-DL, 224x224 int8 (~125 ms)"
+endchoice
+
+# 2. Its own settings, only shown while it is the chosen model.
+menu "Model: pedestrian_pico"
+    depends on NS_MODEL_PEDESTRIAN_PICO
+
+    config NS_PEDESTRIAN_PICO_SCORE_PCT
+        int "Score threshold, percent"
+        range 1 99
+        default 70
+        help
+            Boxes below this score are dropped by the model. 70 is the model's own default.
+            An app can change it at runtime with ns_infer_set_param("score_thr", ...):
+            Night Sentinel sets 0.30 so near misses reach the log.
+
+    config NS_PEDESTRIAN_PICO_NMS_PCT
+        int "NMS threshold, percent"
+        range 1 99
+        default 50
+        help
+            Two boxes that overlap by more than this are treated as the same person, and
+            only the better one is kept.
+
+endmenu

@@ -1,0 +1,16 @@
+# 1. Add this model to the "Model" list (menuconfig -> Platform: inference).
+choice NS_MODEL # ignore: multiple-definition
+    config NS_MODEL_DUMMY
+        bool "dummy: no neural network, for testing the pipeline (template for new models)"
+endchoice
+
+# 2. Its own settings, only shown while it is the chosen model.
+menu "Model: dummy"
+    depends on NS_MODEL_DUMMY
+
+    config NS_DUMMY_SCORE_PCT
+        int "Score reported for the box, percent"
+        range 1 99
+        default 90
+
+endmenu

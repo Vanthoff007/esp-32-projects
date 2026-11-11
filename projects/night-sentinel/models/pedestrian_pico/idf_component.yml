@@ -1,0 +1,3 @@
+## The runtime this model needs. Downloaded by the component manager on the first build.
+dependencies:
+  espressif/esp-dl: "~3.3.14"

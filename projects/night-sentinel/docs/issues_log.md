@@ -24,6 +24,24 @@ Related: setup and commands in [ESP32_SETUP_AND_COMMANDS.md](ESP32_SETUP_AND_COM
 
 ## 2026-11-11
 
+### Board reset when the model was loaded after Wi-Fi was up
+- **Symptom:** pressing Start (or uploading the weights file) with Wi-Fi connected: `ESP_ERROR_CHECK failed: esp_err_t 0x101 (ESP_ERR_NO_MEM) ... func: phy_track_pll_init`, `abort() was called`, reboot. One time it survived with `min_int` = 12 bytes.
+- **Cause:** building an ESP-DL model needs tens of KB of internal RAM for a moment. Before the refactor the model was always loaded at boot, before Wi-Fi took its share; the new engine could load it later, when only ~58 KB was free.
+- **Fix:** the engine loads the model in `ns_infer_start()`, before Wi-Fi (`platform/infer/infer.c`). The weights file is read into PSRAM by the engine in 4 KB pieces and handed to the model as bytes. Loading later (file uploaded after boot) is still possible but tight on memory: restart the board after uploading weights.
+- **Status:** ✅ fixed for the normal boot path · 🟡 late load still risky
+
+### Lowest internal RAM fell from 18.9 KB to about 10 KB after the refactor
+- **Symptom:** `/status` `min_int` 10544 right after boot (was 18944 on firmware 0.9.0); free in steady state is unchanged (~42 KB).
+- **Cause:** not pinned down. The dip happens while Wi-Fi starts. New since 0.9.0: the frame hub and recorder tasks and a few more static buffers.
+- **Fix:** recorder and JPEG encoder stacks moved to PSRAM; web reply buffers moved to PSRAM; `CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL` lowered from 4096 to 1024 (`sdkconfig.defaults`). Result: ~49 KB free while running (was 42), lowest 11–14 KB.
+- **Status:** 🟡 better, still below the old 18.9 KB; watch it in the soak test
+
+### `idf.py` run from the wrong folder left a `build/` inside a managed component
+- **Symptom:** `CMake Error ... Configuring incomplete` and a new `managed_components/espressif__esp-dl/build/`.
+- **Cause:** the shell was still inside `managed_components/espressif__esp-dl` when `idf.py flash` ran.
+- **Fix:** deleted that `build/` folder; always `Set-Location` to the project folder before `idf.py`.
+- **Status:** ℹ️ lesson
+
 ### Event photo stamped in UTC right after a reboot
 - **Symptom:** `ev/E00015_20261110-184755.jpg` while the others were `..._20261111-0011xx` (IST).
 - **Cause:** the clock survives a software reset (RTC), but the time zone was only set in `ns_time_start()`, after Wi-Fi. An alert in the first seconds used UTC.

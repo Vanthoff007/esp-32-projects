@@ -1,51 +1,15 @@
-menu "Night Sentinel app"
+menu "Night Sentinel build"
 
     config NS_DEBUG_HTTP
-        bool "Debug web server (live view, /snap.jpg, /detect, test actions)"
+        bool "Web server (page, live view, /snap.jpg, /detect, /sd, actions)"
         default y
         help
-            Development tool. Turn off for the demo build.
-
-    config NS_FRAME_CSV
-        bool "Print one CSV line per frame on serial (F,t_ms,n,score,x1,y1,x2,y2,...)"
-        default y
-        help
-            Input for tools/serial_log.py, host_test replay and tools/sweep.py (Days 5-11).
-            Turn off for the demo build.
-
-    config NS_HEARTBEAT_S
-        int "Heartbeat every N seconds (0 = off)"
-        default 60
-        help
-            One line with uptime, fps, free memory, Wi-Fi signal, events and state, on serial
-            (H,...) and in /sdcard/heartbeat.csv. Used by the Day 13 soak test.
-
-    config NS_DEMO_MODE
-        bool "Demo mode: 15 s cooldown instead of 30 s"
-        default n
-
-    choice NS_IR_MODE
-        prompt "IR LEDs"
-        default NS_IR_AUTO
-        config NS_IR_AUTO
-            bool "automatic, from the light sensor (with hysteresis)"
-        config NS_IR_ALWAYS_ON
-            bool "always on"
-        config NS_IR_ALWAYS_OFF
-            bool "always off (control tests)"
-    endchoice
-
-    config NS_IR_ON_BELOW_LUX
-        int "Automatic IR: turn on below this many lux"
-        default 3
-        help
-            The LTR-308 read 0.1 lux in the dark test room and ~35-85 lux with room light.
-            The IR LEDs themselves barely change the reading, so they can't fool the switch.
-
-    config NS_IR_OFF_ABOVE_LUX
-        int "Automatic IR: turn off above this many lux"
-        default 10
-        help
-            Must be well above the "on" level, so the IR doesn't flicker on and off at dusk.
+            Development tool with no password. Turn off for a demo build.
+            The other switches are with their components:
+              Platform: inference    which model is built in, start at boot or not
+              Platform: recorder     video recording
+              Platform: web server   live stream
+              Platform: camera and IR
+              Night Sentinel app / network / alerts
 
 endmenu

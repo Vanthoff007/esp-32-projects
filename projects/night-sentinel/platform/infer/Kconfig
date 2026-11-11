@@ -1,0 +1,34 @@
+menu "Platform: inference"
+
+    # Each folder in models/ adds its own entry to this list (see models/README.md).
+    choice NS_MODEL # ignore: multiple-definition
+        prompt "Model"
+        help
+            The one model that is built into the firmware. Its weights file is read from the
+            SD card at start-up (see "Folder with model weight files").
+
+        config NS_MODEL_NONE
+            bool "none (inference compiled out)"
+    endchoice
+
+    config NS_MODEL_DIR
+        string "Folder with model weight files"
+        default "/sdcard/models"
+        help
+            Where the model's weights file is looked for. Copy files there with
+            tools/sd.py push <file> models/  (or put the card in a PC).
+
+    config NS_INFER_AT_BOOT
+        bool "Start inference at boot"
+        default y
+        help
+            Off = wait for the Start button on the web page (or /action?name=detect&arg=1).
+
+    config NS_FRAME_CSV
+        bool "Print one CSV line per frame on serial (F,t_ms,n,score,x1,y1,x2,y2,...)"
+        default y
+        help
+            Input for tools/serial_log.py, host_test replay and tools/sweep.py.
+            Turn off for a demo build.
+
+endmenu

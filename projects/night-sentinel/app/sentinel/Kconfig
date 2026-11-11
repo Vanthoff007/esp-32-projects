@@ -1,0 +1,20 @@
+menu "Night Sentinel app"
+
+    config NS_PERSON_LABEL
+        string "Model label that counts as a person"
+        default "person"
+        help
+            The app works with any model in models/ that has a label with this name.
+
+    config NS_HEARTBEAT_S
+        int "Heartbeat every N seconds (0 = off)"
+        default 60
+        help
+            One line with uptime, fps, free memory, Wi-Fi signal, events and state, on serial
+            (H,...) and in /sdcard/heartbeat.csv. Used by the soak test.
+
+    config NS_DEMO_MODE
+        bool "Demo mode: 15 s cooldown instead of 30 s"
+        default n
+
+endmenu

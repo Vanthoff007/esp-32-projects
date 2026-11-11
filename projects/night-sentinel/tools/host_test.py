@@ -1,6 +1,6 @@
 """Build and run the PC-side C programs in host_test/ (Day 6).
 
-Compiles components/intrusion/intrusion_fsm.c unchanged together with
+Compiles app/intrusion/intrusion_fsm.c unchanged together with
   host_test/test_fsm.c  -> build_host/test_fsm(.exe)  unit tests, run straight away
   host_test/replay.c    -> build_host/replay(.exe)    log replay, used by sweep.py
 
@@ -15,8 +15,8 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-SRC_FSM = REPO / "components" / "intrusion" / "intrusion_fsm.c"
-INC = REPO / "components" / "intrusion" / "include"
+SRC_FSM = REPO / "app" / "intrusion" / "intrusion_fsm.c"
+INC = REPO / "app" / "intrusion" / "include"
 OUT = REPO / "build_host"
 EXE = ".exe" if sys.platform == "win32" else ""
 

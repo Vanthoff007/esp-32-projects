@@ -34,7 +34,7 @@ NIGHT = REPO / "testdata" / "night"
 ROBOFLOW = REPO / "testdata" / "roboflow" / "person by infrared camera.v1i.yolov8"
 THRESHOLDS = (0.3, 0.4, 0.5, 0.6, 0.7)
 
-# The firmware's box filters (components/intrusion/include/intrusion_config.h): boxes smaller
+# The firmware's box filters (app/intrusion/include/intrusion_config.h): boxes smaller
 # than 10 % of the frame height or covering > 80 % of it don't count as a person.
 MIN_BOX_H, MAX_BOX_AREA = 0.10, 0.80
 

@@ -42,35 +42,58 @@ Measured numbers: [docs/results.md](docs/results.md). What's left and how to run
 | microSD | SPI mode: CS 10, MOSI 11, SCK 12, MISO 13; FAT32 |
 | Power | USB-C 5 V (≥ 2 A for field tests) or VIN 3.7–15 V |
 
-Every GPIO is defined in [components/board/include/board_pins.h](components/board/include/board_pins.h). Pin sources and datasheets: [docs/ESP32_SETUP_AND_COMMANDS.md, Appendix A](docs/ESP32_SETUP_AND_COMMANDS.md#appendix-a-pins) and [resources/](resources/).
+Every GPIO is defined in [platform/board/include/board_pins.h](platform/board/include/board_pins.h). Pin sources and datasheets: [docs/ESP32_SETUP_AND_COMMANDS.md, Appendix A](docs/ESP32_SETUP_AND_COMMANDS.md#appendix-a-pins) and [resources/](resources/).
 
-## Architecture
+## Code layout
+
+Three layers. `models/` and `app/` use `platform/`; `platform/` never uses them.
 
 ```text
-main/app_main.c   boot: NVS → camera → light sensor → detector → SD → speaker → push task
-                  → start monitoring (0.8 s after power-on) → Wi-Fi → clock → mDNS → web server
-components/
-├── board/        every GPIO (board_pins.h), status LED, IR LEDs
-├── camera/       OV3660 setup and night tuning (camera.c), LTR-308 light sensor (light.c)
-├── detector/     C++ wrapper around esp-dl's pedestrian_detect with a C API (ns_det_run)
-├── intrusion/    pure-C state machine + thresholds (intrusion_config.h); also builds on the PC
-├── event/        one intrusion event, shared by reference count (one JPEG per event)
-├── alerts/       speaker: I2S + embedded 16 kHz warning clip (assets/warn.pcm)
+main/app_main.c   start-up order only: board → camera → SD → speaker → push → recorder
+                  → app → model → frame hub → Wi-Fi → clock → mDNS → web server
+platform/         REUSABLE FIRMWARE: knows nothing about people or alarms
+├── board/        every GPIO (board_pins.h), status LED patterns, IR LEDs
+├── camera/       OV3660 setup (camera.c), light sensor (light.c), day/night switch (night.c),
+│                 frame hub (frame_hub.c): one grab and one JPEG shared by everyone
+├── infer/        THE CONTRACT (include/infer.h) + the engine that runs the chosen model
+├── recorder/     video to the SD card (.avi, Motion-JPEG): continuous or a clip per event
+├── storage/      microSD: mount, writer task, files and CSV lines
 ├── net/          Wi-Fi + setup page, mDNS, SNTP clock, ntfy phone push
-├── storage/      microSD: JPEG per event, events.csv, heartbeat.csv, boot.csv
-└── debug_http/   dev web server: live view, /snap.jpg, /status, /detect, /action test hooks
+├── alerts/       speaker: I2S + embedded 16 kHz warning clip (assets/warn.pcm)
+└── debug_http/   web server: /snap.jpg, /status, /action, /sd, live stream; others add routes
+models/           YOUR WORKSPACE: one folder per model (see models/README.md)
+├── pedestrian_pico/   Espressif's pre-trained person detector (ESP-DL), weights on the SD card
+└── dummy/             no network: pipeline test and the template for new models
+app/              NIGHT SENTINEL: what this project does with the model's results
+├── sentinel/     results → state machine → speaker, push, SD evidence, clip; the web page
+├── intrusion/    pure-C state machine + thresholds (intrusion_config.h); also builds on the PC
+└── event/        one intrusion event, shared by reference count (one JPEG per event)
 host_test/        FSM unit tests and the log replay tool (built with tools/host_test.py)
 ```
 
+**Trying another model touches only `models/`.** Pick it in `idf.py menuconfig` → Platform: inference → Model, put its weights on the SD card (`uv run sd.py push-model <name>`), build and flash. How to add one: [models/README.md](models/README.md).
+
 | Task | Core | Job |
 |---|---|---|
-| detect | 1 | grab the newest frame → model (125 ms) → box filters → state machine → on an intrusion encode one JPEG and hand the event on. Watched by the task watchdog |
+| capture | 1 | grab the newest frame → model (125 ms) → hand the results to the app (box filters → state machine → on an intrusion encode one JPEG and hand the event on). Watched by the task watchdog |
+| jpeg | 0 | encode frames for `/snap.jpg`, the live stream and the recorder; idle when nobody asks |
+| recorder | 0 | write video files |
 | audio / notify / storage | 0 | speak the warning · HTTPS push with the JPEG (retry, then text-only) · write JPEG + CSV row (after the push result is known) |
 | monitor | 0 | every 2 s: IR on below 3 lux, off above 10 lux (night mode follows IR); heartbeat every 60 s |
-| led | 0 | slow flash = monitoring, solid = alert active, fast blink = error |
+| led | 0 | slow flash = monitoring, solid = alert active, fast blink = error or model not loaded |
+
+### Three independent switches
+
+| Switch | At build time (`idf.py menuconfig`) | While running |
+|---|---|---|
+| Inference | Platform: inference → Model (`none` compiles it out), "Start inference at boot" | Start/Stop on the page, `/action?name=detect&arg=0` or `1` |
+| Live stream | Platform: web server → Live video stream | "Allow live video" on the page, `/action?name=stream&arg=0` or `1` |
+| Recording | Platform: recorder (on/off, mode at boot, fps, clip length, free space kept) | Off / Everything / Clips on the page, `/action?name=rec&arg=0`, `1` or `2` |
+
+Any mix works. Measured: inference alone 8.0 fps; with recording 6.4 fps; with recording and a live viewer 6.0 fps.
 
 - **Intrusion logic** (plan section 8): a box counts if score ≥ 0.60, height ≥ 10 % of the frame and area ≤ 80 %. 3 hits in 5 frames confirm; the alert fires once; no hit for 3 s → 30 s cooldown; at most 10 alerts an hour.
-- **Graceful degradation:** no Wi-Fi → still detects and speaks; no SD card → still detects, speaks and pushes, and retries the card every 30 s.
+- **Graceful degradation:** no Wi-Fi → still detects and speaks. No SD card → the model can't be loaded, so the LED blinks fast and the page says which file is missing; camera, stream and Wi-Fi still work.
 - **Camera:** QVGA 320×240 RGB565 (big-endian), 2 frame buffers in PSRAM, always the newest frame, sensor clocks 30/15 MHz. Settings explained in [docs/ESP32_SETUP_AND_COMMANDS.md, Appendix B](docs/ESP32_SETUP_AND_COMMANDS.md#appendix-b-camera-configuration).
 
 ## Software and dependencies
@@ -80,7 +103,8 @@ host_test/        FSM unit tests and the log replay tool (built with tools/host_
 | ESP-IDF | v6.1, target `esp32s3` |
 | `espressif/esp32-camera` | 2.1.8 (pulls in `espressif/esp_jpeg` 1.3.1) |
 | `espressif/mdns` | 1.14.0 |
-| `espressif/pedestrian_detect` | 0.3.2 (Pico model, 224×224, pre-trained), with `espressif/esp-dl` |
+| `espressif/esp-dl` | 3.3.x: runs the `pedestrian_pico` model (Espressif's pre-trained Pico weights, 224×224) |
+| `espressif/esp_new_jpeg` | 1.x: decodes JPEGs posted to `/detect` |
 
 Versions are pinned in [dependencies.lock](dependencies.lock); the component manager downloads them into `managed_components/` on the first build. Board settings (flash, octal PSRAM at 80 MHz, 240 MHz CPU, 6 MB app partition, esp-dl speed settings: 64 KB data cache, 64 B lines, -O2; TLS and Wi-Fi buffers in PSRAM) are in [sdkconfig.defaults](sdkconfig.defaults) and [partitions.csv](partitions.csv).
 
@@ -104,25 +128,61 @@ In VS Code, open `projects/night-sentinel` itself (not the repository root) so t
 3. Once online, the camera page is at **`http://night-sentinel.local/`**. The status LED flashes briefly every 2 s while monitoring.
 4. Phone alerts: set a secret topic in `idf.py menuconfig` → Night Sentinel network → ntfy topic, and subscribe to it in the ntfy app.
 
-Optional: a fallback network, and the hotspot's name and password, can be set in `idf.py menuconfig` → Night Sentinel network. App options (debug server, per-frame CSV, demo mode, IR mode and thresholds) are under → Night Sentinel app; speaker options under → Night Sentinel alerts.
+Optional: a fallback network, and the hotspot's name and password, can be set in `idf.py menuconfig` → Night Sentinel network. Other options are grouped by layer: Platform: inference / recorder / web server / camera and IR, Night Sentinel app, Night Sentinel alerts, Night Sentinel build.
 
-## Web interface (debug)
+5. The model's weights must be on the SD card once: `cd tools`, then `uv run sd.py push-model pedestrian_pico`.
+
+## Web interface
+
+No password: anyone on the same Wi-Fi can use it. Turn it off for a build that leaves the house (menuconfig → Night Sentinel build).
 
 | URL | What it does |
 |---|---|
-| `/` | Dashboard: camera (off / snapshot every 1 s / live stream) with the detection box drawn on top, start/stop person detection, accept-score slider, alert/speaker/push tests, volume, IR mode and camera settings, SD card space and the latest event photos, memory, reboot. Page source: `components/debug_http/www/index.html` |
+| `/` | The page: camera view with the detection box, the three switches (inference, camera view, recording), alarm tests and volume, night-vision settings, SD card, board health, latest alert photos. Source: `app/sentinel/www/index.html` |
 | `/snap.jpg` | One JPEG snapshot |
-| `/status` | JSON: IR, lux, brightness, gain, exposure, settings, plus state, fps, alerts, memory |
-| `POST /detect` | Run the detector on a posted JPEG, get boxes as JSON (used by `tools/eval_detector.py`) |
-| `/action?name=…` | Test hooks: `alert_test`, `push_test`, `beep`, `gain`, `sd_test`, `ir_mode`, `tasks`, `detect` (0 = stop, 1 = start person detection), `accept` (30–95 %, 0 = default), `reboot` |
-| `/sd?path=…` | SD card: a folder lists `name<TAB>size`, a file downloads, e.g. `/sd?path=ev`, `/sd?path=events.csv` |
-| `/control?var=NAME&val=N` | Change one setting (`ir`, `gainceiling`, `aec2`, …). See [Appendix B.3](docs/ESP32_SETUP_AND_COMMANDS.md#b3-live-settings-controlvarnamevaln) |
+| `/status` | JSON: camera, IR, memory, Wi-Fi, SD card, model, fps, recorder, alarm state |
+| `POST /detect` | Run the model on a posted JPEG, get boxes as JSON (used by `tools/eval_detector.py`) |
+| `/action?name=…` | `detect` (0/1), `rec` (0 off, 1 continuous, 2 event clips), `rec_clip`, `stream` (0/1), `accept` (30–95 %, 0 = default), `alert_test`, `push_test`, `beep`, `gain`, `sd_test`, `ir_mode`, `tasks`, `reboot` |
+| `/sd?path=…` | SD card: `GET` lists a folder (`name<TAB>size`) or downloads a file, `POST` uploads the request body, `DELETE` removes a file or an empty folder |
+| `/control?var=NAME&val=N` | Change one camera setting (`ir`, `gainceiling`, `aec2`, …). See [Appendix B.3](docs/ESP32_SETUP_AND_COMMANDS.md#b3-live-settings-controlvarnamevaln) |
 | `/reg?addr=0x3a14[&val=0x06]` | Read or write a sensor register (experiments) |
 | `:81/stream` | MJPEG live stream |
 
+## SD card from a terminal
+
+The board serves its card over Wi-Fi; `tools/sd.py` wraps that. Needs the board online, the web server built in, and a FAT32 card in the slot.
+
+```powershell
+cd tools
+uv run sd.py ls                      # the card's root
+uv run sd.py ls ev                   # one folder
+uv run sd.py tree rec                # every file under a folder
+uv run sd.py pull events.csv         # download one file
+uv run sd.py pull ev ..\sd_copy      # download a whole folder
+uv run sd.py push my.espdl models/   # upload a file
+uv run sd.py push-model pedestrian_pico
+uv run sd.py rm rec/20261111-113533_V.avi
+uv run sd.py df                      # free space
+```
+
+Add `--host 192.168.1.22` (the board's IP, from the serial log) if `night-sentinel.local` is slow to resolve.
+
+Without the script, the same four things with `curl.exe` (plain `curl` in PowerShell 5.1 is a different command):
+
+```powershell
+curl.exe "http://night-sentinel.local/sd?path=ev"
+curl.exe -o events.csv "http://night-sentinel.local/sd?path=events.csv"
+curl.exe --data-binary "@my.espdl" "http://night-sentinel.local/sd?path=models/my.espdl"
+curl.exe -X DELETE "http://night-sentinel.local/sd?path=rec/old.avi"
+```
+
+For many large videos, taking the card out and using a card reader is faster.
+
+What the firmware keeps on the card: `models/` (weights), `rec/` (videos; the oldest are deleted when less than 100 MB is free), `ev/` + `events.csv` (alert photos and log), `heartbeat.csv`, `boot.csv`. It never touches anything else on the card.
+
 ## Tools (PC side)
 
-Python scripts in [tools/](tools/), managed with uv: snapshot grabbing, labelled test-image capture, night-settings sweeps, light logging, a YOLO reference detector, and for Days 4–13: `serial_log.py` (record F/S/H/T lines), `eval_detector.py` (score test images on the board), `host_test.py` (FSM tests + replay, compiled with zig cc), `sweep.py` (threshold sweep), `plot_heartbeat.py` (soak plot), `make_audio.py` (warning clip). See [tools/README.md](tools/README.md).
+Python scripts in [tools/](tools/), managed with uv: snapshot grabbing, labelled test-image capture, night-settings sweeps, light logging, a YOLO reference detector, and for Days 4–13: `serial_log.py` (record F/S/H/T lines), `eval_detector.py` (score test images on the board), `host_test.py` (FSM tests + replay, compiled with zig cc), `sweep.py` (threshold sweep), `plot_heartbeat.py` (soak plot), `make_audio.py` (warning clip), `sd.py` (browse the SD card). See [tools/README.md](tools/README.md).
 
 Camera images (`testdata/`, `test-results/`) are kept local and are not committed; their CSV logs are.
 

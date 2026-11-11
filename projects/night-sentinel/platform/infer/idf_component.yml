@@ -1,0 +1,3 @@
+## JPEG decoder for POST /detect (scoring saved test images on the board).
+dependencies:
+  espressif/esp_new_jpeg: "^1"

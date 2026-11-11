@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Night Sentinel</title>
+<style>
+/* Dusk, not black: the page is read in a dark room next to an infrared camera.
+   Amber (a sodium street lamp) is the only action colour; red and green are kept for
+   "alarm" and "all clear" so they always mean something. Fonts are ones already on the
+   device (the board is often on a hotspot with no internet): DIN-style instrument lettering. */
+:root{
+  --ink:#17152a; --panel:#211e38; --well:#110f21; --rule:#37325a;
+  --text:#ece8f8; --mute:#9a94b8; --lamp:#f2b441; --alarm:#ff5a4f; --clear:#63d6b0;
+  --din:Bahnschrift,"DIN Alternate","Roboto Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box}
+html{color-scheme:dark}
+body{margin:0;background:var(--ink);color:var(--text);font:15px/1.45 var(--body);font-variant-numeric:tabular-nums}
+a{color:var(--lamp);text-underline-offset:3px}
+:focus-visible{outline:2px solid var(--lamp);outline-offset:2px}
+
+/* ---- top bar ---- */
+.top{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 20px;padding:14px 20px 10px;max-width:1280px;margin:0 auto}
+.top h1{font:600 22px/1 var(--din);letter-spacing:.02em;margin:0}
+.top p{margin:0;color:var(--mute);font-size:13px}
+
+/* ---- two columns: the view, and the desk ---- */
+.stage{display:grid;gap:20px;padding:0 20px 20px;max-width:1280px;margin:0 auto;grid-template-columns:minmax(0,1fr)}
+@media(min-width:940px){.stage{grid-template-columns:minmax(0,1.25fr) minmax(340px,.9fr);align-items:start}}
+
+/* The view: the one loud thing on the page. */
+.view{position:relative;aspect-ratio:4/3;background:var(--well);border-radius:4px;overflow:hidden}
+.view img,.view canvas{position:absolute;inset:0;width:100%;height:100%}
+.view .empty{position:absolute;inset:0;display:grid;place-items:center;color:var(--mute);text-align:center;padding:20px}
+.plate{display:flex;flex-wrap:wrap;align-items:center;gap:6px 24px;padding:14px 4px 4px;border-bottom:1px solid var(--rule)}
+.plate .state{font:700 clamp(30px,6vw,46px)/1 var(--din);letter-spacing:.01em;margin-right:auto;color:var(--mute)}
+.state.s-IDLE{color:var(--clear)} .state.s-CANDIDATE{color:var(--lamp)}
+.state.s-CONFIRMED,.state.s-ALERT_ACTIVE{color:var(--alarm)} .state.s-COOLDOWN{color:var(--text)}
+.plate dl{display:flex;gap:22px;margin:0}
+.plate dt{font-size:12px;color:var(--mute)} .plate dd{margin:0;font:600 20px/1.2 var(--din)}
+.viewbar{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 4px 0;font-size:13px;color:var(--mute)}
+
+/* ---- the desk ---- */
+.desk{background:var(--panel);border-radius:4px}
+.sw{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px 14px;align-items:center;padding:16px 18px;border-bottom:1px solid var(--rule)}
+.sw h2{font:600 17px/1.2 var(--din);margin:0;letter-spacing:.01em}
+.sw .say{flex-basis:100%;margin:0;color:var(--mute);font-size:13px;min-height:1.45em}
+.sw .say b{color:var(--text);font-weight:600}
+.sw .more{flex-basis:100%;display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:13px}
+.warn{color:var(--lamp)!important}
+
+button,select{font:inherit;color:var(--text);background:transparent;border:1px solid var(--rule);border-radius:3px;padding:7px 12px;cursor:pointer}
+button:hover,select:hover{border-color:var(--lamp)}
+button:disabled,select:disabled{opacity:.45;cursor:default}
+select{background:var(--panel)}
+.main{font:600 15px/1 var(--din);padding:10px 16px;min-width:76px;border-color:var(--lamp);color:var(--lamp)}
+.main.on{background:var(--lamp);color:var(--ink)}
+.seg{display:inline-flex}
+.seg button{border-radius:0;margin-left:-1px;padding:8px 11px}
+.seg button:first-child{border-radius:3px 0 0 3px;margin-left:0}.seg button:last-child{border-radius:0 3px 3px 0}
+.seg button.on{background:var(--lamp);border-color:var(--lamp);color:var(--ink);font-weight:600;position:relative}
+input[type=range]{flex:1;min-width:120px;accent-color:var(--lamp)}
+
+details{border-bottom:1px solid var(--rule)}
+details:last-child{border-bottom:0}
+summary{padding:13px 18px;cursor:pointer;font:600 15px/1.2 var(--din);display:flex;justify-content:space-between;gap:12px}
+summary span{font:400 13px/1.3 var(--body);color:var(--mute);text-align:right}
+.in{padding:2px 18px 16px;display:grid;gap:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.row>span:first-child{color:var(--mute);min-width:92px;font-size:13px}
+.facts{display:grid;grid-template-columns:auto 1fr;gap:5px 16px;margin:0;font-size:13px}
+.facts dt{color:var(--mute)} .facts dd{margin:0}
+.note{color:var(--mute);font-size:13px;margin:0;max-width:62ch}
+.meter{height:5px;background:var(--well);border-radius:3px;overflow:hidden}.meter i{display:block;height:100%;background:var(--lamp)}
+
+/* ---- below: events and output ---- */
+.below{max-width:1280px;margin:0 auto;padding:0 20px 40px;display:grid;gap:26px}
+.below h2{font:600 17px/1.2 var(--din);margin:0 0 10px;display:flex;justify-content:space-between;align-items:center}
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px}
+.gal a{color:var(--mute);font-size:12px;text-decoration:none}
+.gal .note{grid-column:1/-1}
+.gal img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:3px;display:block;background:var(--well);margin-bottom:3px}
+#log{font:12px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--well);border-radius:4px;padding:10px 12px;margin:0;color:var(--mute)}
+@media(max-width:520px){.top,.stage,.below{padding-left:12px;padding-right:12px}.plate dl{gap:16px}}
+</style></head><body>
+
+<header class="top">
+  <h1>Night Sentinel</h1>
+  <p id="hdr">Connecting to the board…</p>
+</header>
+
+<div class="stage">
+  <section aria-label="Camera">
+    <div class="view">
+      <div class="empty" id="vempty">Camera view is off.<br>Nothing is being sent to this page.</div>
+      <img id="v" alt="Camera view"><canvas id="ov" width="320" height="240"></canvas>
+    </div>
+    <div class="plate">
+      <div class="state" id="state">…</div>
+      <dl>
+        <div><dt>Speed</dt><dd><span id="fps">–</span> fps</dd></div>
+        <div><dt>Model time</dt><dd><span id="inf">–</span> ms</dd></div>
+        <div><dt>Score now</dt><dd id="score">–</dd></div>
+      </dl>
+    </div>
+    <div class="viewbar">
+      <span>Green box: counted as a person. Amber box: seen, but below the accept score or the wrong size.</span>
+      <a href="/snap.jpg" download="snap.jpg">Save a snapshot</a>
+    </div>
+  </section>
+
+  <section class="desk" aria-label="Controls">
+    <!-- The three switches. Each works on its own: any mix of on and off is fine. -->
+    <div class="sw">
+      <h2>Inference</h2>
+      <button class="main" id="detbtn">…</button>
+      <p class="say" id="detsay"></p>
+      <div class="more"><span>Record while it runs</span>
+        <select id="recsel" aria-label="Recording when inference starts"><option value="0">Nothing<option value="1">Everything<option value="2">A clip per alert</select></div>
+    </div>
+    <div class="sw">
+      <h2>Camera view</h2>
+      <span class="seg" id="viewmode"><button data-m="off">Off</button><button data-m="snap">1 per second</button><button data-m="live">Live</button></span>
+      <p class="say" id="viewsay"></p>
+      <div class="more"><label><input type="checkbox" id="strm"> Allow live video from this board</label></div>
+    </div>
+    <div class="sw">
+      <h2>Recording</h2>
+      <span class="seg" id="recmode"><button data-v="0">Off</button><button data-v="1">Everything</button><button data-v="2">Clips</button></span>
+      <p class="say" id="recsay"></p>
+      <div class="more"><button data-a="rec_clip">Save a test clip</button><a href="/sd?path=rec" target="_blank">Open recordings</a></div>
+    </div>
+
+    <details>
+      <summary>Alarm <span id="alarmsum"></span></summary>
+      <div class="in">
+        <div class="row"><span>Accept score</span><input type="range" id="acc" min="30" max="95" step="5" aria-label="Accept score"><b id="accv">–</b><button id="accdef">Default</button></div>
+        <p class="note">A box must score at least this much to count as a person. Changes apply at once and go back to the default on reboot. At most 10 alerts per hour.</p>
+        <div class="row"><span>Volume</span><input type="range" id="vol" min="0" max="200" step="10" aria-label="Speaker volume"><b id="volv">–</b></div>
+        <div class="row"><span>Try it</span><button data-a="beep&arg=0">Beep</button><button data-a="beep&arg=1">Spoken warning</button><button data-a="push_test">Phone message</button></div>
+        <div class="row"><span>Full alert</span><button data-a="alert_test&arg=0">With a test picture</button><button data-a="alert_test&arg=1">With a camera photo</button></div>
+        <dl class="facts"><dt>Phone push</dt><dd id="push">–</dd><dt>Clock</dt><dd id="clock">–</dd></dl>
+      </div>
+    </details>
+
+    <details>
+      <summary>Night vision <span id="nightsum"></span></summary>
+      <div class="in">
+        <div class="row"><span>IR lamps</span><span class="seg" id="irmode"><button data-v="0">Auto</button><button data-v="1">On</button><button data-v="2">Off</button></span></div>
+        <dl class="facts">
+          <dt>Room light</dt><dd><span id="lux">–</span> lux, picture brightness <span id="luma">–</span> of 255</dd>
+          <dt>Exposure</dt><dd><span id="exp">–</span> ms at gain <span id="gain">–</span>× (limit <span id="gc">–</span>×)</dd>
+        </dl>
+        <div class="row">
+          <label>Gain limit <select data-c="gainceiling"><option>2<option>4<option>8<option>16<option>32<option>63</select></label>
+          <label>Exposure target <select data-c="ae_level"><option>-2<option>-1<option selected>0<option>1<option>2</select></label>
+          <label>Brightness <select data-c="brightness"><option>-2<option>-1<option selected>0<option>1<option>2</select></label>
+        </div>
+        <div class="row">
+          <label>Long exposure <select data-c="aec2"><option value="0">off<option value="1">on</select></label>
+          <label>Grey picture <select data-c="special_effect"><option value="0">off<option value="2">on</select></label>
+        </div>
+      </div>
+    </details>
+
+    <details>
+      <summary>SD card <span id="sdsum"></span></summary>
+      <div class="in">
+        <div class="meter"><i id="sdbar" style="width:0"></i></div>
+        <div class="row"><a href="/sd" target="_blank">All files</a><a href="/sd?path=ev" target="_blank">Event photos</a><a href="/sd?path=models" target="_blank">Models</a>
+          <a href="/sd?path=events.csv">events.csv</a><a href="/sd?path=heartbeat.csv">heartbeat.csv</a><a href="/sd?path=boot.csv">boot.csv</a></div>
+        <div class="row"><button data-a="sd_test&arg=10">Write 10 test files</button></div>
+        <p class="note">From a terminal: <code>uv run sd.py ls</code>, <code>pull</code>, <code>push</code>, <code>rm</code> in the tools folder.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>Board <span id="boardsum"></span></summary>
+      <div class="in">
+        <dl class="facts">
+          <dt>Firmware</dt><dd id="fw">–</dd>
+          <dt>Settings set</dt><dd id="params">–</dd>
+          <dt>Running for</dt><dd id="up">–</dd>
+          <dt>Wi-Fi signal</dt><dd id="rssi">–</dd>
+          <dt>Internal memory</dt><dd><span id="ram">–</span> KB free, lowest <span id="ramlow">–</span> KB</dd>
+          <dt>Extra memory</dt><dd><span id="psram">–</span> MB free</dd>
+          <dt>Frames checked</dt><dd id="frames">–</dd>
+        </dl>
+        <div class="row"><button data-a="tasks">Show processor use</button><button id="reboot">Restart the board</button></div>
+      </div>
+    </details>
+  </section>
+</div>
+
+<div class="below">
+  <section>
+    <h2>Latest alerts <button id="galref">Refresh</button></h2>
+    <div class="gal" id="gal"></div>
+  </section>
+  <section>
+    <h2>What the board answered</h2>
+    <pre id="log">Replies to the buttons above appear here.</pre>
+  </section>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+let S={}, mode='snap', snapT=null, logged=false;
+const log=t=>{const l=$('log'); if(!logged){l.textContent='';logged=true;} l.textContent=new Date().toLocaleTimeString()+'  '+t+'\n'+l.textContent;};
+const act=(a,quiet)=>fetch('/action?name='+a).then(r=>r.text()).then(t=>{if(!quiet)log(a.split('&')[0]+': '+t);status();return t;}).catch(e=>log('No answer from the board: '+e.message));
+const STATES={IDLE:'Watching',CANDIDATE:'Something there',CONFIRMED:'Person',ALERT_ACTIVE:'Person',COOLDOWN:'Gone, cooling down'};
+const fmtUp=s=>{const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?`${h} h ${m} min`:`${m} min ${s%60} s`;};
+
+// ---- camera view (only this page's view: the board keeps working whatever is chosen) ----
+function setMode(m){
+  mode=m; clearInterval(snapT); const v=$('v');
+  document.querySelectorAll('#viewmode button').forEach(b=>b.classList.toggle('on',b.dataset.m==m));
+  $('vempty').hidden=m!='off'; v.hidden=m=='off';
+  if(m=='live'){v.src='http://'+location.hostname+':81/stream';}
+  else{v.removeAttribute('src'); if(m=='snap'){const f=()=>{v.src='/snap.jpg?t='+Date.now()};f();snapT=setInterval(f,1000);}}
+  $('viewsay').textContent=m=='off'?'Off. The camera still feeds the model and the recorder.':m=='snap'?'One still picture each second.':'Live video, about 8 pictures a second.';
+  drawBox();
+}
+document.querySelectorAll('#viewmode button').forEach(b=>b.onclick=()=>{
+  if(b.dataset.m=='live'&&!S.stream){log('Live video is switched off. Tick "Allow live video" first.');return;} setMode(b.dataset.m);});
+function drawBox(){
+  const c=$('ov').getContext('2d'); c.clearRect(0,0,320,240);
+  if(!S.box||mode=='off'||!S.detect)return;
+  const [x1,y1,x2,y2]=S.box; if(x2<=x1||S.best_score<=0)return;
+  const col=S.box_ok?'#63d6b0':'#f2b441'; c.strokeStyle=col; c.lineWidth=2; c.strokeRect(x1,y1,x2-x1,y2-y1);
+  c.fillStyle=col; c.font='bold 12px sans-serif'; c.fillText(S.best_score.toFixed(2),x1+3,Math.max(12,y1+13));
+}
+
+// ---- what the board says, once a second ----
+function status(){
+  return fetch('/status').then(r=>r.json()).then(j=>{
+    S=j;
+    const st=$('state');
+    if(j.detect){st.textContent=STATES[j.state]||j.state; st.className='state s-'+j.state;}
+    else{st.textContent=j.model_ready||j.model=='none'?'Not watching':'No model'; st.className='state';}
+    $('hdr').textContent=`Firmware ${j.fw}, running for ${fmtUp(j.uptime_s)}, ${j.alerts} alert${j.alerts==1?'':'s'} since restart`;
+    const run=j.detect&&j.fps>0;   // numbers only mean something while the model is running
+    $('fps').textContent=run?j.fps.toFixed(1):'–'; $('inf').textContent=run?j.infer_ms.toFixed(0):'–'; $('score').textContent=j.detect?j.best_score.toFixed(2):'–';
+
+    const d=$('detbtn'); d.textContent=j.detect?'Stop':'Start'; d.classList.toggle('on',!!j.detect); d.disabled=j.model=='none';
+    const ds=$('detsay'); ds.classList.toggle('warn',!j.detect);
+    ds.innerHTML=j.model=='none'?'This firmware was built without a model.'
+      :j.detect?`Running <b>${j.model}</b>. Alerts are on.`
+      :j.model_ready?`<b>${j.model}</b> is loaded but stopped. No alerts until you start it.`
+      :`<b>${j.model}</b> is not loaded: ${j.model_msg}.`;
+
+    const rec=!!j.rec;
+    $('recsel').disabled=!rec; if(rec&&document.activeElement!==$('recsel'))$('recsel').value=j.rec_mode;
+    document.querySelectorAll('#recmode button').forEach(b=>{b.classList.toggle('on',rec&&b.dataset.v==j.rec_mode);b.disabled=!rec;});
+    const rs=$('recsay'); const bad=rec&&j.rec_mode!=0&&!j.rec_on&&j.rec_msg&&j.rec_msg!='recording'; rs.classList.toggle('warn',!!bad);
+    rs.textContent=!rec?'Recording is not part of this firmware build.'
+      :j.rec_on?`Writing ${j.rec_file}, ${j.rec_frames} pictures so far.`
+      :j.rec_mode==0?'Off. Nothing is saved as video.'
+      :bad?`Not recording: ${j.rec_msg}.`
+      :j.rec_mode==2?'Waiting. Each alert saves 3 s before it and 10 s after.':'Starting a new file…';
+    $('strm').checked=!!j.stream;
+
+    if(document.activeElement!==$('acc')){$('acc').value=Math.round(j.accept*100);} $('accv').textContent=j.accept.toFixed(2);
+    if(document.activeElement!==$('vol')){$('vol').value=j.audio_gain;} $('volv').textContent=j.audio_gain+' %';
+    $('alarmsum').textContent=`accept ${j.accept.toFixed(2)}, volume ${j.audio_gain} %`;
+    $('push').textContent=j.push?'Ready':'No topic set (menuconfig), so no phone messages'; $('clock').textContent=j.time_synced?'Set from the internet':'Not set yet';
+
+    document.querySelectorAll('#irmode button').forEach(b=>b.classList.toggle('on',['auto','on','off'][b.dataset.v]==j.ir_mode));
+    $('nightsum').textContent=`IR ${j.ir?'on':'off'}, ${j.als_lux} lux`;
+    $('lux').textContent=j.als_lux; $('luma').textContent=Math.round(j.luma);
+    $('exp').textContent=j.exposure_ms; $('gain').textContent=j.gain; $('gc').textContent=j.gainceiling;
+
+    $('sdsum').textContent=j.sd?`${j.sd_free_mb} MB free of ${j.sd_total_mb}`:'No card';
+    $('sdbar').style.width=j.sd&&j.sd_total_mb?(100*(1-j.sd_free_mb/j.sd_total_mb))+'%':'0';
+    $('boardsum').textContent=`${(j.free_int/1024).toFixed(0)} KB free, Wi-Fi ${j.rssi||'–'} dBm`;
+    $('fw').textContent=j.fw; $('params').textContent=j.params; $('up').textContent=fmtUp(j.uptime_s);
+    $('rssi').textContent=j.rssi?j.rssi+' dBm':'–'; $('frames').textContent=j.frames;
+    $('ram').textContent=(j.free_int/1024).toFixed(0); $('ramlow').textContent=(j.min_int/1024).toFixed(0);
+    $('psram').textContent=(j.free_psram/1048576).toFixed(1);
+    drawBox();
+  }).catch(()=>{$('hdr').textContent='The board is not answering. Check its power and that you are on the same Wi-Fi.'; $('state').textContent='No contact'; $('state').className='state';});
+}
+
+// ---- controls ----
+// Start uses the recording choice under the button, then starts the model.
+$('detbtn').onclick=()=>{const on=!S.detect;
+  if(!on&&!confirm('Stop inference? There will be no alerts until you start it again or the board restarts.'))return;
+  (on&&S.rec?act('rec&arg='+$('recsel').value,true):Promise.resolve()).then(()=>act('detect&arg='+(on?1:0)));};
+$('recsel').onchange=e=>act('rec&arg='+e.target.value);
+document.querySelectorAll('#recmode button').forEach(b=>b.onclick=()=>act('rec&arg='+b.dataset.v));
+$('strm').onchange=e=>{act('stream&arg='+(e.target.checked?1:0)); if(!e.target.checked&&mode=='live')setMode('snap');};
+$('acc').oninput=e=>$('accv').textContent=(e.target.value/100).toFixed(2);
+$('acc').onchange=e=>act('accept&arg='+e.target.value);
+$('accdef').onclick=()=>act('accept&arg=0');
+$('vol').oninput=e=>$('volv').textContent=e.target.value+' %';
+$('vol').onchange=e=>act('gain&arg='+e.target.value);
+document.querySelectorAll('#irmode button').forEach(b=>b.onclick=()=>act('ir_mode&arg='+b.dataset.v));
+document.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>act(b.dataset.a));
+document.querySelectorAll('[data-c]').forEach(s=>s.onchange=()=>fetch('/control?var='+s.dataset.c+'&val='+s.value).then(r=>r.text()).then(()=>{log(s.dataset.c+' set to '+s.value);status();}));
+$('reboot').onclick=()=>{if(confirm('Restart the board? It is back in about 10 seconds.'))act('reboot');};
+
+// ---- the newest 12 alert photos from the SD card ----
+function gallery(){
+  fetch('/sd?path=ev').then(r=>r.ok?r.text():'').then(t=>{
+    const files=t.split('\n').map(l=>l.split('\t')[0]).filter(n=>/\.jpg$/i.test(n)).sort().reverse().slice(0,12);
+    $('gal').innerHTML=files.length?files.map(f=>`<a href="/sd?path=ev/${f}" target="_blank"><img loading="lazy" alt="" src="/sd?path=ev/${f}">${f.replace('.jpg','').replace('_',' ')}</a>`).join('')
+      :'<p class="note">No alert photos yet. Each alert saves one picture here, if a card is in the slot.</p>';
+  }).catch(()=>{});
+}
+$('galref').onclick=gallery;
+
+setMode('snap'); status(); setInterval(status,1000); gallery();
+</script>
+</body></html>
