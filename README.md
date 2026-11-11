@@ -6,7 +6,7 @@ A collection of independent ESP32 projects. Each project lives in its own folder
 
 | Project | Board | Status | Summary |
 |---|---|---|---|
-| [Night Sentinel](projects/night-sentinel/) | DFRobot DFR1154 (ESP32-S3 AI Camera) | In progress (Day 3 of 14) | Night-time person alert that runs entirely on the camera board: IR night vision, on-device person detection, then a spoken warning, phone push and JPEG evidence on SD |
+| [Night Sentinel](projects/night-sentinel/) | DFRobot DFR1154 (ESP32-S3 AI Camera) | Working end to end; modular firmware 0.10.0 (platform / models / app). Field tests and model experiments in progress | Night-time person alert that runs entirely on the camera board: IR night vision, on-device person detection, then a spoken warning, phone push and JPEG evidence on SD |
 
 ## Repository layout
 

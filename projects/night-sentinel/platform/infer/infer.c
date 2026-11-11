@@ -313,8 +313,10 @@ static void on_frame(const camera_fb_t *fb, int64_t grab_us, void *ctx)
 #define DETECT_MAX_BODY (400 * 1024)
 
 // POST /detect, body = one JPEG. Runs the model on it and answers with JSON:
-//   {"model":"pedestrian_pico","w":320,"h":240,"ms":131,"boxes":[[0.78,112,40,190,236], ...],"cls":[0, ...]}
-// boxes = score, x1, y1, x2, y2 per item; cls = the label index of the same item.
+//   {"model":"pedestrian_pico","w":320,"h":240,"ms":131,"boxes":[[0.78,112,40,190,236], ...],
+//    "cls":[0, ...],"labels":["person"]}
+// boxes = score, x1, y1, x2, y2 per item; cls = the label index of the same item;
+// labels = the model's label names (cut short if a model has very many).
 // tools/eval_detector.py sends the test images through this.
 static esp_err_t detect_handler(httpd_req_t *req)
 {
@@ -349,17 +351,21 @@ static esp_err_t detect_handler(httpd_req_t *req)
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "could not decode (colour baseline JPEG only)");
         return ESP_FAIL;
     }
-    static char json[900];   // static: one request at a time, keeps it off the stack
+    static char json[1500];   // static: one request at a time, keeps it off the stack
     int n = snprintf(json, sizeof(json), "{\"model\":\"%s\",\"w\":%d,\"h\":%d,\"ms\":%lld,\"boxes\":[",
                      s_model->name, w, h, res.time_us / 1000);
-    for (int i = 0; i < res.count && n < (int)sizeof(json) - 120; i++) {
+    for (int i = 0; i < res.count && n < (int)sizeof(json) - 700; i++) {
         const ns_item_t *b = &res.item[i];
         n += snprintf(json + n, sizeof(json) - n, "%s[%.3f,%d,%d,%d,%d]", i ? "," : "", b->score,
                       b->x1, b->y1, b->x2, b->y2);
     }
     n += snprintf(json + n, sizeof(json) - n, "],\"cls\":[");
-    for (int i = 0; i < res.count && n < (int)sizeof(json) - 12; i++) {
+    for (int i = 0; i < res.count && n < (int)sizeof(json) - 640; i++) {
         n += snprintf(json + n, sizeof(json) - n, "%s%d", i ? "," : "", res.item[i].cls);
+    }
+    n += snprintf(json + n, sizeof(json) - n, "],\"labels\":[");
+    for (int i = 0; i < s_model->n_labels && n < (int)sizeof(json) - 48; i++) {
+        n += snprintf(json + n, sizeof(json) - n, "%s\"%.32s\"", i ? "," : "", s_model->labels[i]);
     }
     snprintf(json + n, sizeof(json) - n, "]}");
     httpd_resp_set_type(req, "application/json");

@@ -81,7 +81,7 @@ esp_err_t ns_cam_init(void)
     s->set_reg(s, 0x3a0b, 0xff, 109 & 0xff);  // 60 Hz band step, low byte
     s->set_reg(s, 0x3a0d, 0xff, 7);           // 60 Hz max bands per frame
 
-    // Night defaults, from the Day 3 sweep at 0.1 lux with IR on (docs/notes.md, 2026-11-06).
+    // Night defaults, from the Day 3 sweep at 0.1 lux with IR on (docs/results.md, Board notes, 2026-11-06).
     // Gain ceiling 16x: the driver's default is 15x, and raising it to 32x or 63x made the
     // picture no brighter (the sensor's real gain tops out near 16x).
     ns_cam_set_gain_ceiling(16);

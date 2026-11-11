@@ -1,8 +1,8 @@
 # ESP32 setup and command handbook
 
-How to set up, build, flash, run and debug the night-sentinel firmware on the DFRobot DFR1154, in the order you'd do it. Last checked 2026-11-06 on the machine and board described below.
+How to set up, build, flash, run and debug the night-sentinel firmware on the DFRobot DFR1154, in the order you'd do it. Sections 1 to 3 and the appendices were last checked on 2026-11-06; the project layout, boot log, web page and quick reference were updated on 2026-11-11 for firmware 0.10.0 (the `platform/` / `models/` / `app/` layout).
 
-Related docs: [notes.md](notes.md) (board facts) · [issues_log.md](issues_log.md) (every problem hit, by date, with full measurements) · [../tools/README.md](../tools/README.md) (PC-side Python tools) · `docs/next_steps.md` (session handoff; **local only**, git-ignored).
+Related docs: [MODEL_GUIDE.md](MODEL_GUIDE.md) (add a model, build it, test it on pictures) · [results.md](results.md) (measured results and board facts) · [issues_log.md](issues_log.md) (every problem hit, by date, with full measurements) · [../tools/README.md](../tools/README.md) (PC-side Python tools) · `docs/next_steps.md` (session handoff and parked ideas; **local only**, git-ignored).
 
 **Status labels:** ✅ verified on this setup · ⏳ not verified (documented or suggested, never run here) · 🔥 overwrites or erases the board.
 
@@ -121,15 +121,15 @@ Night Sentinel is one project in the [ESP32 Projects](../../../README.md) reposi
 | Path | Contents |
 |---|---|
 | `CMakeLists.txt` | ESP-IDF project root, `project(night-sentinel)` |
-| `main/` | `app_main.c`; `idf_component.yml` (depends on `espressif/esp32-camera`) |
-| `components/board/` | `board_pins.h` (**every GPIO**), `status_led.c`, `ir.c` (`ir_set`, `ir_get`) |
-| `components/camera/` | `ns_cam_init / ns_cam_grab / ns_cam_release`; `ns_cam_mean_luma` (frame brightness), `ns_cam_read_ae` (live gain/exposure), `ns_cam_set_gain_ceiling`, `ns_cam_scan_bus` (I2C scan + LTR-308 check) |
-| `components/net/` | Wi-Fi (`ns_wifi_connect`: saved network, else setup hotspot), setup page (`wifi_portal.c`), mDNS (`ns_mdns_start`); menu in its `Kconfig`; `idf_component.yml` (depends on `espressif/mdns`) |
-| `components/debug_http/` | Debug web server: port 80 `/`, `/snap.jpg`, `/control`, `/status`; port 81 `/stream` |
+| `main/` | `app_main.c`: start-up order only; `Kconfig.projbuild` (web server on/off) |
+| `platform/` | **Reusable firmware.** `board/` (`board_pins.h` = **every GPIO**, status LED patterns, IR), `camera/` (OV3660, LTR-308 light sensor, day/night switch, frame hub), `infer/` (the model contract `infer.h` + the engine), `recorder/` (video to SD), `storage/` (SD card), `net/` (Wi-Fi, setup page, mDNS, clock, phone push), `alerts/` (speaker), `debug_http/` (web server) |
+| `models/` | **One folder per model**, picked in menuconfig: `pedestrian_pico/`, `dummy/`. See [MODEL_GUIDE.md](MODEL_GUIDE.md) |
+| `app/` | **Night Sentinel itself:** `sentinel/` (results → alarm, the web page), `intrusion/` (state machine + thresholds), `event/` |
+| `host_test/` | PC-side unit tests and log replay for the state machine (`uv run host_test.py`) |
 | `sdkconfig.defaults`, `partitions.csv` | Committed board configuration ([step 3.1](#31-configure)) |
 | `dependencies.lock` | Resolved component versions (committed) |
-| `tools/` | PC-side Python: `detect.py`, `grab_snaps.py`, `capture_set.py` (Day 3) |
-| `test-results/` | Saved snapshots, Day 3 tuning sweeps and light logs |
+| `tools/` | PC-side Python, see [tools/README.md](../tools/README.md): SD card (`sd.py`), model tests (`try_model.py`, `eval_detector.py`), captures, serial logging, tuning |
+| `test-results/` | Saved snapshots, tuning sweeps, light logs, model test output (`try/`, `day4/`) |
 | `testdata/` | Labelled day/night test images for Day 4 (`capture_set.py snap`), each set with an `index.csv` |
 | git-ignored | `build/`, `sdkconfig`, `sdkconfig.old`, `managed_components/`, `.vscode/` (repository `.gitignore`); `docs/next_steps.md`, camera images (project `.gitignore`) |
 
@@ -225,13 +225,31 @@ Run in an IDF terminal from `D:\Projects\esp32-projects\projects\night-sentinel`
 
    These go into `sdkconfig`, which is git-ignored, so they never reach GitHub. Any other menuconfig change the project depends on must also be copied into `sdkconfig.defaults`.
 
-4. **Component dependencies** come from the component manager. Versions resolved in `dependencies.lock` ✅:
+4. **Project settings by menu** (`idf.py menuconfig`, all near the bottom of the top level or under Component config):
+
+   | Menu | What is in it |
+   |---|---|
+   | Platform: inference | Which **model** is built in, the SD folder for weights, start inference at boot (off in this project), per-frame CSV on serial |
+   | Model: <name> | The chosen model's own settings (e.g. score threshold) |
+   | Platform: recorder | Video recording on/off, mode at boot, frames per second, clip lengths, free space to keep |
+   | Platform: web server | Live video stream on/off |
+   | Platform: camera and IR | IR mode at boot, the lux levels for the day/night switch, JPEG quality |
+   | Night Sentinel app | Label that counts as a person, heartbeat interval, demo mode |
+   | Night Sentinel alerts | Speaker on/off and volume |
+   | Night Sentinel network | Fallback Wi-Fi, setup hotspot, ntfy server and topic, time zone |
+   | Night Sentinel build | The web server as a whole on/off |
+
+   A setting the project depends on must also go into `sdkconfig.defaults`, or a fresh clone won't have it.
+
+5. **Component dependencies** come from the component manager. Versions resolved in `dependencies.lock` ✅:
 
    | Component | Version | Declared in |
    |---|---|---|
    | `espressif/esp32-camera` | 2.1.8 | `main/idf_component.yml` |
    | `espressif/esp_jpeg` | 1.3.1 | pulled in by esp32-camera |
-   | `espressif/mdns` | 1.14.0 | `components/net/idf_component.yml` |
+   | `espressif/mdns` | 1.14.0 | `platform/net/idf_component.yml` |
+   | `espressif/esp-dl` | 3.3.x | `models/pedestrian_pico/idf_component.yml` (each model names its own runtime) |
+   | `espressif/esp_new_jpeg` | 1.x | `platform/infer/idf_component.yml` (decodes pictures sent to `/detect`) |
 
    They download into `managed_components/` on the next build. To add one: `idf.py add-dependency "<namespace>/<name>"` (or `--component <name>` to add it to that component), then `idf.py reconfigure`. The camera driver is **`espressif/esp32-camera`**; `espressif/camera` doesn't exist.
 
@@ -291,28 +309,28 @@ Also available, never run ⏳: erase the whole flash including NVS (Wi-Fi calibr
 
 ### 4.1 Check the boot log
 
-Current firmware (`main/app_main.c`): status LED + IR init → NVS → camera → I2C bus scan → Wi-Fi (or setup hotspot) → mDNS → debug web server → light log every 5 s. Expected log (✅ up to the I2C scan and the setup-mode lines, 2026-11-06; the online part ✅ 2026-10-23 with the older firmware, and its `http:` / `light:` lines are taken from the current code):
+Start-up order (`main/app_main.c`): status LED + IR → NVS → camera → light sensor → SD card → speaker → phone push → recorder → app → **model loaded from the SD card** → frame hub → Wi-Fi (or setup hotspot) → clock → mDNS → web server. Expected log, firmware 0.10.0 (✅ 2026-11-11, trimmed):
 
 ```
 I (...) boot:  2 factory          factory app      00 00 00010000 00600000
 I (...) esp_psram: Found 8MB PSRAM device
-I (...) esp_psram: Speed: 80MHz
-I (...) esp_psram: SPI SRAM memory test OK
-I (...) camera: Detected OV3660 camera
-I (...) ov3660: Calculated VCO: 240000000 Hz, PLLCLK: 120000000 Hz, SYSCLK: 30000000 Hz, PCLK: 15000000 Hz
 I (...) camera: camera ready (sensor PID 0x3660)
-I (...) main: camera init OK
-I (...) camera: I2C scan: device at 0x3c (OV3660 camera)
-I (...) camera: I2C scan: device at 0x53 (LTR-308 light sensor?)
-I (...) camera: I2C scan: 2 device(s) on GPIO 8/9
-I (...) camera: LTR-308 part ID 0xb1 (datasheet says 0xB1)
+I (...) storage: SD card mounted: ..., 941 MB
+I (...) rec: recorder ready: 5 fps, mode off
+I (...) sentinel: Night Sentinel 0.10.0, reset reason: power-on
+I (...) infer: weights: 425 KB read from the card in ... ms; internal RAM ... KB free
+I (...) infer: model pedestrian_pico loaded in ... ms
+I (...) infer: model pedestrian_pico (detector, 1 label), inference off at boot
+I (...) hub: frame hub started
 I (...) wifi: connecting to "<saved network>"
 I (...) wifi: got IP 192.168.1.22
-I (...) main: wifi OK
 I (...) mdns: open http://night-sentinel.local/
-I (...) http: debug server: port 80 /, /snap.jpg, /control, /status; port 81 /stream
-I (...) main: light: luma 92.4, gain 1.94x, exposure 59.9 ms, IR off      ← every 5 s
+I (...) http: web server: port 80 (1 extra route, 13 actions), port 81 /stream
+I (...) main: online
+I (...) time: clock set from the internet: 2026-11-11T12:03:40+05:30
 ```
+
+After you press Start on the page: `W infer: inference started`, then one `T,frames=50,...,fps=8.00` line every 50 frames, and (if per-frame CSV is on) one `F,` line per frame.
 
 If the saved network can't be reached (✅ 2026-11-06):
 
@@ -324,14 +342,17 @@ I (...) portal: scan found 4 networks
 W (...) wifi: SETUP MODE: join Wi-Fi "NightSentinel-Setup" (password "sentinel123") and open http://192.168.4.1/
 ```
 
-When online, the **status LED (GPIO3) turns on**, which is useful without a serial cable. LED off after boot means setup mode. An earlier `ov3660` line with `SYSCLK: 20000000 Hz` is the driver default, before the project's clock change.
+The **status LED (GPIO3)** flashes briefly every 2 s while the board runs normally, stays on during an alert, and blinks fast (5 times a second) on a fatal start-up error or when inference is switched on but the model could not be loaded. An earlier `ov3660` line with `SYSCLK: 20000000 Hz` is the driver default, before the project's clock change.
 
 | Log line | Meaning / fix |
 |---|---|
 | `W wifi: SETUP MODE: ...` | No saved network reachable: use the setup page ([4.2](#42-connect-to-wi-fi-setup-page)) |
 | `W wifi: disconnected (reason N), retry k/3` | 201 = network not found (out of range, or 5 GHz only), 15 / 202 / 204 = wrong password, 210 / 211 = open/WEP network (refused). After 3 retries the board switches to setup mode |
 | `W wifi: disconnected (reason N), reconnecting` | Lost the network after being online. Retries forever by itself |
-| `W camera: LTR-308 not found at 0x53` | The light sensor didn't answer. Day/night falls back to frame brightness |
+| `W camera: LTR-308 not found at 0x53` | The light sensor didn't answer. Day/night falls back to the camera's gain |
+| `W infer: weights file ... not found on the SD card` | No card, or the model file is not in `models/` on it: `uv run sd.py push-model <name>`, then restart ([MODEL_GUIDE.md](MODEL_GUIDE.md)) |
+| `E sentinel: NOT MONITORING: ...` | Inference is switched on but the model isn't loaded; the text after the colon says why |
+| `ESP_ERR_NO_MEM ... abort()` right after pressing Start | The model was loaded after Wi-Fi was up and internal memory ran out. Restart the board ([issues log, 2026-11-11](issues_log.md)) |
 | `cam_hal: FB-SIZE: 138240 != 153600` (no `W`/`E` prefix) | A short frame the driver **silently dropped**. ~16 per minute while streaming is expected; constant drops mean the camera clocks are too fast |
 | `cam_hal: Failed to get frame: timeout` every 4 s | No frames at all: the sensor clocks are inconsistent ([Appendix B](#appendix-b-camera-configuration)) |
 | `E camera init failed` | Check camera pins against [Appendix A](#appendix-a-pins) |
@@ -364,7 +385,9 @@ Two servers run so the stream doesn't block anything: **port 80** serves the pag
 
 | What | How | Status |
 |---|---|---|
-| Live view + controls | Browser: `http://night-sentinel.local/`. IR on/off, gain ceiling, AE level, brightness, AEC2, greyscale; the status line updates every 2 s | ✅ 2026-11-06 |
+| The page | Browser: `http://night-sentinel.local/`. Camera view with the detection box; three independent switches (inference Start/Stop, camera view, recording); alarm tests and volume; night-vision settings; SD card; board health; latest alert photos. Updates every second | ✅ 2026-11-11 |
+| SD card files | `uv run sd.py ls` / `pull` / `push` / `rm` / `clean` in `tools\` ([README](../README.md#sd-card-from-a-terminal)) | ✅ 2026-11-11 |
+| Run the model on your own pictures | `uv run try_model.py <files or folder>` in `tools\` ([MODEL_GUIDE.md](MODEL_GUIDE.md#part-3-test-it-on-your-own-pictures)) | ⏳ |
 | Live view in VLC | Media → Open Network Stream → `http://night-sentinel.local:81/stream` | ⏳ (curl: 109 frames in ~12 s ✅) |
 | One snapshot | `http://night-sentinel.local/snap.jpg`; also works while a stream is open (HTTP 200 in 0.22 s) | ✅ |
 | Change one setting | `http://night-sentinel.local/control?var=ir&val=1` (names below); unknown name → HTTP 400 | ✅ |
@@ -375,11 +398,13 @@ Two servers run so the stream doesn't block anything: **port 80** serves the pag
 
 `/control` names, ranges, boot values and what each does: [Appendix B.3](#b3-live-settings-controlvarnamevaln). Registers via `/reg`: [B.4](#b4-registers-reference). Settings reset at reboot.
 
-The stream is MJPEG encoded on the chip (JPEG quality 80): ~9 fps, ~8.5 KB per frame. The monitor logs `http: stream: N frames, X fps` every 50 frames and `stream closed after N frames` when the viewer leaves.
+The stream is MJPEG encoded on the chip (JPEG quality 80), ~9 KB per frame. Snapshots, the stream and the recorder share one JPEG encoder (the frame hub), which only runs while one of them is asking. The monitor logs `http: stream: N frames, X fps` every 50 frames and `stream closed after N frames` when the viewer leaves.
 
 To run without the laptop, power it from a charger ([1.1](#11-hardware)) and use the addresses above.
 
-### 4.4 Capture test
+### 4.4 Capture test (historical)
+
+> The `RUN_CAPTURE_TEST` and `LOG_LIGHT_EVERY_MS` switches were removed from `main/app_main.c` when the full pipeline was built (firmware 0.9). The method and the numbers are kept for reference; today the same figures come from the `T,` lines and `/status`.
 
 To re-measure camera capture, set `#define RUN_CAPTURE_TEST 1` in `main/app_main.c`, then flash. It grabs 1,000 frames before Wi-Fi starts and logs fps, NULL frames and free PSRAM. ✅ Expected: `grabbed 1000 frames in ~60200 ms, 0 failures, 16 fps`. **Also count the `FB-SIZE` lines:** they aren't NULL frames, and the loop doesn't see them. Set it back to 0 afterwards; it would compete with the stream for frames.
 
@@ -389,7 +414,7 @@ The brightness log (`main: light: ...` every 5 s) is controlled by `#define LOG_
 
 | Issue | Status |
 |---|---|
-No open issues (2026-11-06). Closed:
+Open issues are tracked in [issues_log.md](issues_log.md) (entries marked 🟡). Closed here by 2026-11-06:
 
 | Issue | Outcome |
 |---|---|
@@ -400,7 +425,9 @@ No open issues (2026-11-06). Closed:
 
 Found during the bus test, for Day 5: with the scene at ~35 lux, capture ran at **11.4 fps** with no other load (Day 2: 16.6 fps). It wasn't start-up settling, power management, or I2C (the busy-bus phase was faster, 13.6–15.8 fps). Still above the detector's ≥6 fps; measure again on Day 5.
 
-### 4.6 Shared I2C bus test
+### 4.6 Shared I2C bus test (historical)
+
+> The `RUN_LIGHT_BUS_TEST` switch was removed from `main/app_main.c` with firmware 0.9. Result kept for reference.
 
 Set `#define RUN_LIGHT_BUS_TEST 1` in `main/app_main.c` and flash. Before Wi-Fi starts, the board grabs frames at full speed for 80 s: warm-up 10 s → camera only 20 s → camera + I2C (LTR-308 lux + camera chip-ID + AE registers, 10× per second) 30 s → camera only 20 s. Pass: 0 lux errors, 0 chip-ID mismatches, 0 NULL frames, no `FB-SIZE` lines between the phase markers, and the I2C phase's fps no lower than camera-only. Set it back to 0 afterwards (it delays boot by 80 s).
 
@@ -427,12 +454,19 @@ Full history and measurements of every problem: [issues_log.md](issues_log.md).
 | First-time config | `idf.py set-target esp32s3` (wipes `sdkconfig`) | [3.1](#31-configure) |
 | Wi-Fi setup | Phone → Wi-Fi `NightSentinel-Setup` / `sentinel123` → `http://192.168.4.1/` | [4.2](#42-connect-to-wi-fi-setup-page) |
 | Settings (fallback Wi-Fi, hotspot name) | `idf.py menuconfig` → Night Sentinel network, `S` to save | [3.1](#31-configure) |
+| Choose the model | `idf.py menuconfig` → Platform: inference → Model, then build (full rebuild, ~10 min) | [MODEL_GUIDE.md](MODEL_GUIDE.md#part-2-build-and-flash) |
 | Build / size | `idf.py build` · `idf.py size` | [3.2](#32-build) |
 | Flash + monitor 🔥 | `idf.py -p COM5 flash monitor` | [3.3](#33-flash-) |
 | Monitor only / exit | `idf.py -p COM5 monitor` · `Ctrl+]` | [2.2](#22-open-and-close-the-serial-monitor) |
 | Re-resolve components | `idf.py reconfigure` | [3.1](#31-configure) |
 | Live view / snapshot | `http://night-sentinel.local/` · `/snap.jpg` · stream `:81/stream` | [4.3](#43-view-the-camera-and-change-settings) |
 | IR / camera setting | `/control?var=ir&val=1` · state: `/status` | [4.3](#43-view-the-camera-and-change-settings) |
+| Start / stop inference | Start on the page · `/action?name=detect&arg=1` (or `0`) | [README](../README.md#three-independent-switches) |
+| Recording | Off / Everything / Clips on the page · `/action?name=rec&arg=0`, `1` or `2` | [README](../README.md#three-independent-switches) |
+| Model weights to the SD card | `uv run sd.py push-model pedestrian_pico` (in `tools\`), then restart the board | [MODEL_GUIDE.md](MODEL_GUIDE.md#put-the-weights-on-the-sd-card) |
+| Browse / clean the SD card | `uv run sd.py ls` · `tree` · `pull` · `push` · `rm -r` · `clean` · `df` (in `tools\`) | [README](../README.md#sd-card-from-a-terminal) |
+| Test the model on pictures | `uv run try_model.py <files or folder>` (in `tools\`) | [MODEL_GUIDE.md](MODEL_GUIDE.md#part-3-test-it-on-your-own-pictures) |
+| State-machine unit tests (PC) | `uv run host_test.py` (in `tools\`) | [tools/README.md](../tools/README.md) |
 | Save snapshots | `uv run grab_snaps.py night-sentinel.local -n 10` (in `tools\`, normal terminal) | [4.3](#43-view-the-camera-and-change-settings) |
 | Day 3 captures | `uv run capture_set.py tune --ir on` · `snap --set night --label person --dist 3` · `light --lux N` | [tools/README.md](../tools/README.md) |
 | Find the board's IP | `arp -a` → `28-84-85-5c-6c-cc` | [4.3](#43-view-the-camera-and-change-settings) |
@@ -443,7 +477,7 @@ Full history and measurements of every problem: [issues_log.md](issues_log.md).
 
 ## Appendix A. Pins
 
-Every GPIO the firmware uses is defined in [`components/board/include/board_pins.h`](../components/board/include/board_pins.h); add new pins there first. Pins were checked against DFRobot's example code, then the DFRobot wiki, then schematic v1.1.
+Every GPIO the firmware uses is defined in [`platform/board/include/board_pins.h`](../platform/board/include/board_pins.h); add new pins there first. Pins were checked against DFRobot's example code, then the DFRobot wiki, then schematic v1.1.
 
 **In the firmware** ✅
 
@@ -452,7 +486,7 @@ Every GPIO the firmware uses is defined in [`components/board/include/board_pins
 | Status LED | 3 | `PIN_STATUS_LED` | Active-high. Power LED D8 is hard-wired to 3.3 V |
 | IR LEDs | 47 | `PIN_IR_LED` | `IR_CTL` → EN of the SY7200A LED driver (U2), active-high. For dimming use LEDC **timer 1 / channel 1** |
 | Camera | see below | `PIN_CAM_*` | From DFRobot [`5_3.ino`](https://github.com/DFRobot/DFR1154_Examples/blob/master/5.3%20CameraWebServer/source%20code/5_3/5_3.ino) lines 5–22 |
-| Light sensor LTR-308 | shares SCCB 8 / 9 | `PIN_CAM_SIOD/SIOC` | I2C address **0x53**, part ID 0xB1. Driver `components/camera/light.c` (gain 9×, 100 ms, 18-bit). Safe to read while the camera runs ✅ 2026-11-06 |
+| Light sensor LTR-308 | shares SCCB 8 / 9 | `PIN_CAM_SIOD/SIOC` | I2C address **0x53**, part ID 0xB1. Driver `platform/camera/light.c` (gain 9×, 100 ms, 18-bit). Safe to read while the camera runs ✅ 2026-11-06 |
 
 | Camera signal | GPIO | `camera_config_t` field | Arduino name |
 |---|---|---|---|
@@ -477,7 +511,7 @@ The camera's XCLK uses **LEDC timer 0 / channel 0**; nothing else may use them. 
 
 ## Appendix B. Camera configuration
 
-Every camera setting the project uses: what it means, what it does, the value chosen and why. Code: `ns_cam_init()` in `components/camera/camera.c` (applied at every boot) and `/control` in `components/debug_http/debug_http.c` (changed live, lost at reboot). ✅ = verified on this board.
+Every camera setting the project uses: what it means, what it does, the value chosen and why. Code: `ns_cam_init()` in `platform/camera/camera.c` (applied at every boot) and `/control` in `platform/debug_http/debug_http.c` (changed live, lost at reboot). ✅ = verified on this board.
 
 ### B.1 Driver start-up settings (`camera_config_t`)
 
@@ -547,7 +581,7 @@ Read or write any of these live with `GET /reg?addr=0x3a14[&val=0x06]` (debug en
 | `0x3a18/19` | Gain ceiling | 1/16 steps (16× = 256). Driver default 0x00F8 = 15×; project sets 16× |
 | `0x380e/0x380f` | Frame length (lines) | 783 at QVGA with these clocks |
 
-### B.5 Light sensor (LTR-308, `components/camera/light.c`)
+### B.5 Light sensor (LTR-308, `platform/camera/light.c`)
 
 | Setting | Value | Meaning / reason |
 |---|---|---|
@@ -573,7 +607,7 @@ It barely sees the 940 nm IR LEDs (34 → 37 lux when IR came on), so it's the d
 ### B.7 Measurements
 
 - Capture: **16.6 fps**, 0 NULL and 0 short frames in 1,000 (Wi-Fi off, 2026-10-23); PSRAM free 8,077,692 bytes before and after. On 2026-11-06 at ~35 lux, only 11.4 fps; open, see the [issues log](issues_log.md).
-- Night sweep and settings comparison: [notes.md](notes.md), `test-results/day3/tune-20261106-140725/`.
+- Night sweep and settings comparison: [results.md, Board notes](results.md#board-notes), `test-results/day3/tune-20261106-140725/`.
 
 ## Appendix C. Other firmware flashed to this board
 

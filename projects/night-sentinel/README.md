@@ -71,7 +71,7 @@ app/              NIGHT SENTINEL: what this project does with the model's result
 host_test/        FSM unit tests and the log replay tool (built with tools/host_test.py)
 ```
 
-**Trying another model touches only `models/`.** Pick it in `idf.py menuconfig` → Platform: inference → Model, put its weights on the SD card (`uv run sd.py push-model <name>`), build and flash. How to add one: [models/README.md](models/README.md).
+**Trying another model touches only `models/`.** Pick it in `idf.py menuconfig` → Platform: inference → Model, put its weights on the SD card (`uv run sd.py push-model <name>`), build and flash. Step-by-step manual: [docs/MODEL_GUIDE.md](docs/MODEL_GUIDE.md).
 
 | Task | Core | Job |
 |---|---|---|
@@ -182,20 +182,27 @@ What the firmware keeps on the card: `models/` (weights), `rec/` (videos; the ol
 
 ## Tools (PC side)
 
-Python scripts in [tools/](tools/), managed with uv: snapshot grabbing, labelled test-image capture, night-settings sweeps, light logging, a YOLO reference detector, and for Days 4–13: `serial_log.py` (record F/S/H/T lines), `eval_detector.py` (score test images on the board), `host_test.py` (FSM tests + replay, compiled with zig cc), `sweep.py` (threshold sweep), `plot_heartbeat.py` (soak plot), `make_audio.py` (warning clip), `sd.py` (browse the SD card). See [tools/README.md](tools/README.md).
+Python scripts in [tools/](tools/), managed with uv: snapshot grabbing, labelled test-image capture, night-settings sweeps, light logging, a YOLO reference detector, and for Days 4–13: `serial_log.py` (record F/S/H/T lines), `eval_detector.py` (score test images on the board), `host_test.py` (FSM tests + replay, compiled with zig cc), `sweep.py` (threshold sweep), `plot_heartbeat.py` (soak plot), `make_audio.py` (warning clip), `sd.py` (browse the SD card), `try_model.py` (run the model on your own pictures). See [tools/README.md](tools/README.md).
 
 Camera images (`testdata/`, `test-results/`) are kept local and are not committed; their CSV logs are.
 
 ## Documentation
 
-| File | Contents |
-|---|---|
-| [docs/ESP32_SETUP_AND_COMMANDS.md](docs/ESP32_SETUP_AND_COMMANDS.md) | Setup, build, flash, run and debug; pins (Appendix A); camera configuration (Appendix B) |
-| [docs/notes.md](docs/notes.md) | Measured board facts and test results |
-| [docs/results.md](docs/results.md) | Measured results against the plan's targets |
-| [docs/issues_log.md](docs/issues_log.md) | Every problem hit, by date, with cause and fix |
-| [docs/future.md](docs/future.md) | Ideas parked outside the 14-day scope |
-| [resources/](resources/) | DFR1154 datasheets, schematics, dimensions |
+Five documents in [docs/](docs/), plus two short READMEs next to the code they describe.
+
+| File | Read it when | What it contains |
+|---|---|---|
+| [docs/ESP32_SETUP_AND_COMMANDS.md](docs/ESP32_SETUP_AND_COMMANDS.md) | Setting up a PC, building, flashing, or something won't connect | Installing ESP-IDF on Windows, serial ports, build/flash/monitor commands, the menuconfig menus, the expected boot log and what each warning means, Wi-Fi setup page, a quick-reference table of every command. Appendices: all pins, every camera setting and register used, C types |
+| [docs/MODEL_GUIDE.md](docs/MODEL_GUIDE.md) | Trying a new model | Step by step: add a model folder, pick it in menuconfig, build and flash, put its weights on the SD card, then test it on your own pictures (`try_model.py`), on labelled sets, and live. Troubleshooting table. How to get an `.espdl` file |
+| [docs/results.md](docs/results.md) | You need a number | Measured results against the targets: speed, memory, detection rates by set, alert tests, before/after the modular refactor. Ends with the board notes: chip, flash, clocks, power, light sensor and night-sweep findings |
+| [docs/issues_log.md](docs/issues_log.md) | Something broke | Every problem hit, newest first, each with the exact symptom, cause, fix and status |
+| `docs/next_steps.md` | Starting a work session | Where the project stands, what to do next, run sheets for the on-site tests, and the parked ideas. **Local only:** it is git-ignored, so it is not on GitHub |
+| [models/README.md](models/README.md) | Looking for a model | The list of models in the repo and a one-page summary of how they plug in |
+| [tools/README.md](tools/README.md) | Running a PC-side script | One section per tool: what it does, commands, where its output goes |
+
+Datasheets, schematics and dimensions for the DFR1154 are in [resources/](resources/).
+
+On 2026-11-11 `notes.md` was merged into `results.md` and `future.md` into `next_steps.md`.
 
 ## License
 

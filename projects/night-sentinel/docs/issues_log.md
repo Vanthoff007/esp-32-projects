@@ -8,7 +8,7 @@ Every entry records:
 - **Fix:** what solved it.
 - **Status:** ✅ fixed · 🟡 open or worked around · ℹ️ lesson only.
 
-Related: setup and commands in [ESP32_SETUP_AND_COMMANDS.md](ESP32_SETUP_AND_COMMANDS.md), board facts in [notes.md](notes.md).
+Related: setup and commands in [ESP32_SETUP_AND_COMMANDS.md](ESP32_SETUP_AND_COMMANDS.md), board facts and measured results in [results.md](results.md), adding and testing models in [MODEL_GUIDE.md](MODEL_GUIDE.md).
 
 ### Template
 
@@ -83,7 +83,7 @@ Related: setup and commands in [ESP32_SETUP_AND_COMMANDS.md](ESP32_SETUP_AND_COM
 ### Night detection fails beyond ~1 m (Day 4 no-go)
 - **Symptom:** night person frames at <= 4 m: 1/17 with a real box >= 0.5. The raw count looked like 9/17, but those were whole-frame boxes `(0,0)-(319,239)` that also appear on 13/20 empty frames.
 - **Cause:** the frames, not the model: at 0.1 lux the on-board IR lights a person well only to ~1 m. Image fixes (stretch, gamma, CLAHE, grey) didn't help, and pre-trained YOLO11n also found 0/18 people at 2.5 m+.
-- **Fix:** none in software. Owner's decision (10 Nov): a dim room light stays on (never fully dark) and the camera is mounted 1–1.5 m from the door. Full Roboflow NIR run (990 close-up images) on the board: 61 % of single frames accepted at 0.6, 75 % at 0.5. No training. Details in notes.md, "Day 4 night go/no-go".
+- **Fix:** none in software. Owner's decision (10 Nov): a dim room light stays on (never fully dark) and the camera is mounted 1–1.5 m from the door. Full Roboflow NIR run (990 close-up images) on the board: 61 % of single frames accepted at 0.6, 75 % at 0.5. No training. Details in results.md, "Day 4 night go/no-go".
 - **Status:** 🟡 worked around; confirm with walk-ins under the dim light
 
 ### Board aborts when the COCO YOLO11n model loads
