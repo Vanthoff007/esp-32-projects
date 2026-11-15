@@ -1,0 +1,7 @@
+flowchart LR
+  A1["Print checkerboard<br/>measure square size"] --> A2["Capture 20–30 views<br/>tilt, corners, distances"]
+  A2 --> A3["findChessboardCorners<br/>+ cornerSubPix"]
+  A3 --> A4["calibrateCamera<br/>K, dist"]
+  A4 --> A5{"Reprojection<br/>under 0.5 px?"}
+  A5 -- no --> A2
+  A5 -- yes --> A6["Save per resolution<br/>QVGA, VGA"]

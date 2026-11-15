@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 370" font-family="DejaVu Sans, Arial, sans-serif" font-size="12.5">
+  <rect width="760" height="370" fill="#ffffff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#18212f">ESP32-S3 memory map for a detect-and-range pipeline (QVGA)</text>
+  <text x="20" y="48" fill="#5b6577" font-size="12">Schematic, not to scale. Region sizes are engineering estimates for the proposed pipeline.</text>
+  <!-- SRAM row -->
+  <text x="20" y="88" fill="#18212f" font-weight="bold">Internal SRAM</text>
+  <text x="20" y="104" fill="#5b6577">512 KB, fast, shared</text>
+  <rect x="180" y="74" width="560" height="34" fill="#f2f5f9" stroke="#d6dbe4"/>
+  <rect x="180" y="74" width="175" height="34" fill="#5b6577"/><text x="186" y="96" fill="#fff">RTOS + Wi-Fi ~160 KB</text>
+  <rect x="355" y="74" width="210" height="34" fill="#0e7c74"/><text x="361" y="96" fill="#fff">tensor arena (detector)</text>
+  <rect x="565" y="74" width="60" height="34" fill="#b98a12"/><text x="569" y="96" fill="#fff">cache</text>
+  <text x="632" y="96" fill="#18212f">free</text>
+  <!-- PSRAM row -->
+  <text x="20" y="160" fill="#18212f" font-weight="bold">PSRAM (octal)</text>
+  <text x="20" y="176" fill="#5b6577">8 MB typical, slower</text>
+  <rect x="180" y="146" width="560" height="34" fill="#f2f5f9" stroke="#d6dbe4"/>
+  <rect x="180" y="146" width="32" height="34" fill="#2f5fd0"/>
+  <rect x="212" y="146" width="32" height="34" fill="#4a77de"/>
+  <text x="182" y="200" fill="#2f5fd0" font-size="11.5">2 × QVGA RGB565 frame buffers = 2 × 150 KB</text>
+  <rect x="244" y="146" width="120" height="34" fill="#0e7c74"/><text x="250" y="168" fill="#fff">large activations</text>
+  <text x="372" y="168" fill="#18212f">free: room for a tracker, logs, a second model</text>
+  <!-- Flash row -->
+  <text x="20" y="240" fill="#18212f" font-weight="bold">Flash</text>
+  <text x="20" y="256" fill="#5b6577">8–16 MB, weights</text>
+  <rect x="180" y="226" width="560" height="34" fill="#f2f5f9" stroke="#d6dbe4"/>
+  <rect x="180" y="226" width="90" height="34" fill="#5b6577"/><text x="186" y="248" fill="#fff">firmware</text>
+  <rect x="270" y="226" width="76" height="34" fill="#0e7c74"/><text x="276" y="248" fill="#fff">detector</text>
+  <rect x="346" y="226" width="6" height="34" fill="#c4561a"/>
+  <text x="358" y="248" fill="#18212f">← distance MLP + calibration table: a few KB</text>
+  <text x="20" y="300" fill="#18212f">Rule: weights live in flash; the peak activation tensor must fit SRAM</text><text x="20" y="318" fill="#18212f">or spill to PSRAM, which is several times slower to access.</text>
+  <text x="20" y="342" fill="#c4561a">A 224×224×32 INT8 feature map is 1.6 MB, about three times all of SRAM.</text><text x="20" y="360" fill="#c4561a">That is why dense depth networks stall on this chip.</text>
+</svg>

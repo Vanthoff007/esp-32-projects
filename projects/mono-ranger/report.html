@@ -1,0 +1,855 @@
+<title>Monocular Rangefinder Survey</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&family=Archivo:wght@600;700;800&display=swap">
+<style>
+/* Layout: engineering lab report. Sticky contents rail on wide screens, single reading column, figures on white "plates". */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --ink:#18212f; --muted:#5b6577; --line:#dde1e8;
+  --accent:#0e7c74; --accent-soft:#e3f2ef; --warn:#c4561a; --warn-soft:#fbeee6; --est:#b98a12; --est-soft:#f8f0d8; --blue:#2f5fd0;
+  --plate:#ffffff;
+  --display:"Archivo","IBM Plex Sans",system-ui,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161f; --surface:#171e2a; --ink:#e4e8ef; --muted:#9aa4b5; --line:#2a3342;
+  --accent:#4fc1b4; --accent-soft:#16302d; --warn:#f08a55; --warn-soft:#352219; --est:#e0b84a; --est-soft:#2f2914; --blue:#7c9cf0;
+  --plate:#ffffff; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161f; --surface:#171e2a; --ink:#e4e8ef; --muted:#9aa4b5; --line:#2a3342;
+  --accent:#4fc1b4; --accent-soft:#16302d; --warn:#f08a55; --warn-soft:#352219; --est:#e0b84a; --est-soft:#2f2914; --blue:#7c9cf0;
+  --plate:#ffffff; color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.62;margin:0}
+.wrap{max-width:1240px;margin:0 auto;padding-block:32px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:250px minmax(0,1fr);gap:48px}
+@media (max-width:960px){.wrap{grid-template-columns:minmax(0,1fr);gap:24px}}
+nav.toc{position:sticky;top:calc(env(safe-area-inset-top,0px) + 20px);align-self:start;max-height:calc(100vh - 40px);overflow:auto;font-size:13.5px;border-left:2px solid var(--line);padding-left:14px}
+@media (max-width:960px){nav.toc{position:static;max-height:none;border-left:none;padding-left:0;border:1px solid var(--line);border-radius:6px;padding:14px 16px;background:var(--surface)}}
+nav.toc .lbl{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+nav.toc ol{list-style:none;margin:8px 0 0;padding:0;counter-reset:s;display:grid;gap:4px}
+nav.toc li{counter-increment:s}
+nav.toc a{color:var(--ink);text-decoration:none;display:grid;grid-template-columns:24px 1fr}
+nav.toc a::before{content:counter(s,decimal-leading-zero);font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:2px}
+nav.toc a:hover,nav.toc a:focus-visible{color:var(--accent)}
+main{min-width:0}
+header.hero{padding-bottom:28px;border-bottom:1px solid var(--line);margin-bottom:8px}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent)}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(30px,4.6vw,46px);line-height:1.08;letter-spacing:-.01em;margin:10px 0 14px;text-wrap:balance}
+.lede{font-size:18px;color:var(--muted);max-width:68ch;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:18px;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+section{padding-top:44px}
+h2{font-family:var(--display);font-weight:700;font-size:clamp(23px,3vw,30px);line-height:1.2;margin:0 0 14px;text-wrap:balance;display:flex;gap:14px;align-items:baseline}
+h2 .n{font-family:var(--mono);font-size:14px;color:var(--accent);font-weight:600}
+h3{font-family:var(--display);font-weight:700;font-size:20px;margin:30px 0 8px;text-wrap:balance}
+h4{font-size:15.5px;font-weight:600;margin:22px 0 6px}
+p,li{max-width:76ch}
+a{color:var(--accent)}
+a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+code,.mono{font-family:var(--mono);font-size:.9em}
+.eq{font-family:var(--mono);background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 16px;margin:14px 0;overflow-x:auto;white-space:pre;font-size:14px;line-height:1.7}
+figure{margin:22px 0;min-width:0}
+figure .plate{background:var(--plate);border:1px solid var(--line);border-radius:6px;padding:12px;overflow-x:auto}
+figure .plate img{display:block;width:100%;height:auto;min-width:560px}
+figure .plate.small img{max-width:820px;margin:0 auto}
+figcaption{font-size:13.5px;color:var(--muted);margin-top:8px;max-width:90ch}
+figcaption b{color:var(--ink);font-family:var(--mono);font-weight:600}
+.tag{display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:1px 7px;border-radius:3px;vertical-align:1px;white-space:nowrap}
+.t-pub{background:var(--accent-soft);color:var(--accent)}
+.t-est{background:var(--est-soft);color:var(--est)}
+.t-con{background:var(--line);color:var(--muted)}
+.t-warn{background:var(--warn-soft);color:var(--warn)}
+.tbl{overflow-x:auto;margin:16px 0;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;vertical-align:top;padding:9px 12px;border-bottom:1px solid var(--line)}
+th{font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:600;background:var(--bg)}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:13px;white-space:nowrap}
+.callout{border:1px solid var(--line);border-radius:6px;padding:16px 18px;background:var(--surface);margin:18px 0}
+.callout.key{border-color:var(--accent);background:var(--accent-soft)}
+.callout.risk{border-color:var(--warn);background:var(--warn-soft)}
+.callout h4{margin-top:0}
+.answers{display:grid;gap:10px;margin:16px 0}
+.ans{display:grid;grid-template-columns:34px minmax(0,1fr);gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:12px 14px}
+.ans .q{font-family:var(--mono);font-weight:600;color:var(--accent);font-size:14px}
+.ans p{margin:0}
+.ans p+p{margin-top:4px}
+.ans strong{display:block}
+.rank{display:grid;gap:18px;margin-top:10px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:18px 20px;min-width:0}
+.card .top{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline}
+.card .pos{font-family:var(--display);font-weight:800;font-size:30px;color:var(--accent);line-height:1}
+.card h3{margin:0;font-size:20px}
+.spec{display:grid;grid-template-columns:200px minmax(0,1fr);gap:0;margin-top:12px;font-size:14px;border-top:1px solid var(--line)}
+.spec dt,.spec dd{padding:7px 0;border-bottom:1px solid var(--line);margin:0}
+.spec dt{font-family:var(--mono);font-size:12px;color:var(--muted);padding-right:12px}
+@media (max-width:640px){.spec{grid-template-columns:minmax(0,1fr)}.spec dt{border-bottom:none;padding-bottom:0}}
+.mer{background:var(--plate);border:1px solid var(--line);border-radius:6px;padding:14px;overflow-x:auto}
+pre.mermaid{margin:0;background:transparent;color:#18212f;font-size:14px;min-width:560px;text-align:center}
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted);margin:10px 0}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.phase{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:16px 18px}
+.phase h4{margin-top:0}
+.phase ul{margin:6px 0 0;padding-left:20px}
+.phase .acc{margin-top:10px;font-size:14px;border-top:1px dashed var(--line);padding-top:8px}
+.refs ol{padding-left:22px;font-size:14px}
+.refs li{margin-bottom:6px;max-width:none}
+footer{margin-top:60px;padding-top:18px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Contents">
+  <div class="lbl">Contents</div>
+  <ol>
+    <li><a href="#summary">Executive summary</a></li>
+    <li><a href="#problem">Problem definition</a></li>
+    <li><a href="#fundamentals">Depth fundamentals</a></li>
+    <li><a href="#approaches">Technical approaches</a></li>
+    <li><a href="#top5">Top five, ranked</a></li>
+    <li><a href="#hardware">Edge feasibility</a></li>
+    <li><a href="#applications">Existing implementations</a></li>
+    <li><a href="#datasets">Datasets and training</a></li>
+    <li><a href="#architectures">System architectures</a></li>
+    <li><a href="#plan">Experimental plan</a></li>
+    <li><a href="#risks">Risks and limits</a></li>
+    <li><a href="#recommend">Final recommendations</a></li>
+    <li><a href="#refs">References</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="hero">
+  <div class="kicker">Technical research survey · v1.0 · 12 Nov 2026</div>
+  <h1>Monocular object-distance estimation on an ESP32-S3</h1>
+  <p class="lede">How to tell how far away a detected person, car or dog is, using one cheap camera and a microcontroller. The survey covers geometry, learned regression, neural depth and hybrid methods, then recommends a first prototype.</p>
+  <div class="meta"><span>Target: ESP32-S3 + OV2640/OV3660</span><span>Comparison: Raspberry Pi 4/5, Jetson</span><span>Standalone project, separate from Night Sentinel</span></div>
+  <div class="legend" style="margin-top:16px">
+    <span><span class="tag t-pub">published</span> figure from a paper, model card or vendor README</span>
+    <span><span class="tag t-est">estimate</span> engineering estimate, not measured</span>
+    <span><span class="tag t-con">conceptual</span> illustrative diagram</span>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section id="summary">
+<h2><span class="n">01</span>Executive summary</h2>
+<div class="callout key">
+<h4>Bottom line</h4>
+<p>An ESP32-S3 can range individual objects with one camera. It does not need a dense depth network to do so. The practical design runs an INT8 object detector on the chip, about 7–8 FPS at 224×224 for Espressif's own detectors <span class="tag t-pub">published</span>. A calibrated geometric model then turns each bounding box into metres, using two independent cues:</p>
+<ul>
+<li><b>Size prior:</b> <span class="mono">Z = f·H/h</span>, using a typical class height.</li>
+<li><b>Ground plane:</b> <span class="mono">D = h<sub>c</sub>/tan(θ+α)</span>, using the camera's mounting height and tilt.</li>
+</ul>
+<p>A tiny regression network (a few thousand parameters) corrects systematic bias. A per-object tracker filters the result over time and reports an uncertainty with every reading.</p>
+</div>
+<p>Main findings:</p>
+<ul>
+<li><b>Dense depth is not necessary, and it is the wrong tool for this chip.</b> The smallest published dense-depth networks need roughly 0.4 GMAC per frame (FastDepth, Wofk et al. 2019) and feature maps several times larger than the S3's 512 KB SRAM. Even the depth foundation models that output metres (Depth Anything V2 Metric, Metric3D v2, Depth Pro, UniDepth V2) have tens to hundreds of millions of parameters. They belong on a Pi or Jetson, or offline as a labelling "teacher".</li>
+<li><b>Geometry is competitive when the scene matches its assumptions.</b> The error model in Fig. 6 assumes an adult standing on flat ground, a camera 2 m high, a calibrated lens and 2 px box jitter. Under those assumptions the fused geometric estimate has a median per-frame error of about 2–4% at 4–10 m and about 7% at 20 m, with 90th-percentile errors of 5–17% <span class="tag t-est">model, not measured</span>. Real-world error will be higher until Phase 1 measures it.</li>
+<li><b>The failure modes are systematic, not random.</b> Children, sitting people, dogs of unknown breed, truncated boxes and sloped ground all break the size prior (Fig. 5). That is where a learned residual model and a second geometric cue pay off. More pixels do not fix these errors.</li>
+<li><b>Learned regression beats pure geometry only when trained on your camera.</b> A bounding-box regressor in the style of DisNet (Haseeb et al. 2018) learns class priors and lens quirks for free. It does not transfer across lenses or mounts unless camera intrinsics are among its inputs.</li>
+<li><b>Recommended first prototype (Architecture 3):</b> an ESP32-S3 camera board, Espressif's pedestrian or <code>espdet</code> detector, one-time checkerboard calibration plus a measured mounting height and pitch, geometric fusion, a Kalman filter on inverse distance, and JSON output over UART or MQTT. No extra compute hardware is needed. The only purchases are a tape measure or laser rangefinder for ground truth, and an S3 board if the existing hardware is the original ESP32-CAM.</li>
+</ul>
+</section>
+
+<!-- ============================================================ -->
+<section id="problem">
+<h2><span class="n">02</span>Problem definition and objectives</h2>
+<p>The goal is a small, low-cost, standalone camera module that detects objects and reports each one's approximate physical distance. Example output:</p>
+<div class="eq">{"id":7,"cls":"person","conf":0.83,"dist_m":2.4,"sigma_m":0.18,"method":"fused","ok":true}
+{"id":3,"cls":"car",   "conf":0.71,"dist_m":5.8,"sigma_m":0.90,"method":"ground","ok":true}
+{"id":9,"cls":"dog",   "conf":0.64,"dist_m":1.7,"sigma_m":0.40,"method":"ground","ok":false}</div>
+<p><b>Research question.</b> What is the most practical and computationally efficient way to estimate the physical distance of individual detected objects with a single camera on a low-cost embedded device?</p>
+<div class="tbl"><table>
+<thead><tr><th>Constraint</th><th>Value used in this survey</th></tr></thead>
+<tbody>
+<tr><td>Primary target</td><td>ESP32-S3: dual-core Xtensa LX7 at 240 MHz with 128-bit SIMD (PIE) instructions, 512 KB SRAM, typically 8 MB octal PSRAM and 8–16 MB flash</td></tr>
+<tr><td>Camera</td><td>OV2640 (2 MP) or OV3660/OV5640 over DVP. QVGA 320×240 or VGA 640×480 working resolution; about 60° horizontal FOV assumed, so f ≈ 277 px at QVGA</td></tr>
+<tr><td>Classes</td><td>person (priority), car, dog, plus other COCO classes as available</td></tr>
+<tr><td>Range of interest</td><td>1–20 m (surveillance and robotics distances)</td></tr>
+<tr><td>Outputs</td><td>class, confidence, distance (m), uncertainty, reliability flag, track ID</td></tr>
+<tr><td>Non-goals</td><td>Visually impressive dense depth maps; integration with Night Sentinel</td></tr>
+</tbody></table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="fundamentals">
+<h2><span class="n">03</span>Monocular depth estimation fundamentals</h2>
+
+<h3>What depth estimation is</h3>
+<p><b>Depth estimation</b> assigns each image point (or each object) its distance from the camera. <b>Monocular</b> depth estimation does this from one image taken from one viewpoint. Because there is no second view, it has to rely on cues: known object sizes, perspective, texture gradients, occlusion, the height of a point in the image relative to the horizon, and priors a network has learned.</p>
+
+<h3>Relative depth versus metric depth</h3>
+<ul>
+<li><b>Relative (affine-invariant) depth</b> gives the order and shape of the scene up to an unknown scale and shift: <span class="mono">d_true ≈ s·d_pred + t</span>. MiDaS, Marigold and Depth Anything V2 (base checkpoints) work this way, often as inverse depth (disparity).</li>
+<li><b>Metric depth</b> is in metres. It needs the network to know or infer the camera (focal length) and the absolute scale of the world. Examples are Metric3D v2, ZoeDepth, UniDepth V2, Depth Pro and the Depth Anything V2 Metric checkpoints.</li>
+</ul>
+<p>For this project only metric output is useful. A relative map still needs one scale reference, such as a known object or the ground plane, before it can report metres.</p>
+
+<figure>
+<div class="plate"><img src="assets/charts/08_rgb_dense_relative_object_level.png" alt="Four panels: synthetic RGB scene, dense metric depth map in metres, relative inverse depth without units, and object boxes labelled with distances"></div>
+<figcaption><b>Fig. 1</b> <span class="tag t-con">synthetic, exact</span> The same ray-traced scene shown four ways: (A) RGB input, (B) exact metric depth per pixel, (C) the unitless relative depth a relative-depth model would produce, and (D) the object-level output this project needs. Panel D carries all the information the module has to report, and it is computed from four boxes rather than 76,800 pixels. Source: <code>scripts/make_figures.py</code>.</figcaption>
+</figure>
+
+<h3>Dense depth versus object-level distance</h3>
+<p>A dense model predicts a value for every pixel and then aggregates it inside each box, typically with a median or a low percentile. An object-level method predicts one number per detection, straight from box geometry, keypoints or a crop. The object-level task is far smaller: a few numbers per object instead of a full-resolution map. It also avoids a known weakness of dense models, which smear depth across object boundaries so that background pixels leak into the box statistics.</p>
+
+<h3>Monocular scale ambiguity</h3>
+<figure>
+<div class="plate small"><img src="assets/diagrams/fig_scale_ambiguity.svg" alt="Three objects of different sizes at different distances all subtend the same angle and produce the same 40-pixel image"></div>
+<figcaption><b>Fig. 2</b> <span class="tag t-con">conceptual</span> A 0.55 m dog at 3.8 m, a 1.2 m child at 8.3 m and a 1.7 m adult at 11.8 m all project to the same 40 px. The image alone fixes only the ratio H/Z. Every monocular method breaks this ambiguity with one extra known quantity.</figcaption>
+</figure>
+
+<h3>Camera intrinsics and extrinsics</h3>
+<p>The pinhole camera maps a 3D point <span class="mono">(X, Y, Z)</span> in camera coordinates to pixel <span class="mono">(u, v)</span>:</p>
+<div class="eq">⎡u⎤   1 ⎡f_x  0   c_x⎤ ⎡X⎤          K = intrinsics (focal lengths, principal point)
+⎢v⎥ = ─ ⎢ 0  f_y  c_y⎥ ⎢Y⎥          [R | t] = extrinsics (camera pose in the world)
+⎣1⎦   Z ⎣ 0   0    1 ⎦ ⎣Z⎦          plus lens distortion k1, k2, p1, p2, k3</div>
+<p><b>Focal length in pixels</b> ties the optics to the pixel grid: <span class="mono">f_px = f_mm · (W_px / sensor_width_mm) = (W_px/2) / tan(HFOV/2)</span>. For a 60° HFOV, f is about 277 px at 320 px width and about 554 px at 640 px. Doubling the resolution doubles f and halves the relative error from one pixel of box jitter. <b>Extrinsics</b> matter for the ground-plane method: mounting height <span class="mono">h_c</span> and pitch <span class="mono">θ</span> (roll should be close to zero).</p>
+
+<h3>Calibration and why it matters</h3>
+<p>OV2640 modules are sold with many interchangeable lenses (roughly 66° to 160° diagonal). A focal-length error passes straight through to distance: a 5% error in f gives a 5% error in Z. Wide lenses also add strong barrel distortion, which bends box heights near the edge of the frame. Calibrating with a checkerboard (Zhang's method, OpenCV <code>calibrateCamera</code>) gives K and the distortion coefficients, usually with a reprojection error below 0.5 px. Calibrate once per lens and resolution.</p>
+
+<h3>Why one image is fundamentally hard</h3>
+<ul>
+<li>Projection is many-to-one. Depth along each ray is lost (Fig. 2).</li>
+<li>Learned cues are statistical. A network trained on driving scenes has learned the camera heights and object sizes of driving scenes.</li>
+<li>Metric output requires knowing the camera. A model that ignores intrinsics makes errors proportional to the focal-length mismatch.</li>
+<li>Error grows with distance. In both geometric models the relative error rises roughly linearly with Z, because the measured pixel quantity shrinks as 1/Z.</li>
+</ul>
+
+<h3>Monocular versus other ranging sensors</h3>
+<div class="tbl"><table>
+<thead><tr><th>Sensor</th><th>Principle</th><th>Typical accuracy</th><th>Range</th><th>Cost</th><th>Power</th><th>Embedded fit</th></tr></thead>
+<tbody>
+<tr><td><b>Monocular camera</b></td><td>Priors: size, ground plane, learned cues</td><td>Roughly 5–15% of range, scene-dependent</td><td>Limited by pixels on target</td><td>$5–15 module</td><td>~0.1–0.3 W sensor</td><td>Excellent; also gives class labels</td></tr>
+<tr><td>Stereo camera</td><td>Triangulation over baseline b: Z = f·b/d</td><td>Error grows as Z²·σ<sub>d</sub>/(f·b); good under ~10 m with 6–12 cm baseline</td><td>Set by baseline</td><td>$30–$400</td><td>1–3 W with processing</td><td>Needs disparity compute; textureless surfaces fail</td></tr>
+<tr><td>Structured light</td><td>Projected IR pattern, triangulated</td><td>mm-level up close</td><td>~0.3–4 m; washes out in sunlight</td><td>$50–$200</td><td>1–3 W</td><td>Indoor only</td></tr>
+<tr><td>Time-of-flight</td><td>Phase or direct ToF of modulated IR</td><td>~1% or a few cm</td><td>Single-zone to 4 m; ToF cameras to 5–10 m</td><td>$3 (VL53L1X) to $300 (ToF camera)</td><td>20 mW to 5 W</td><td>Single-zone sensors suit MCUs but have no object identity</td></tr>
+<tr><td>LiDAR</td><td>Pulsed or FMCW laser ranging</td><td>cm-level</td><td>10–200 m</td><td>$100 (2D) to $1000s (3D)</td><td>2–15 W</td><td>Bulky; sparse at long range</td></tr>
+<tr><td>Ultrasonic</td><td>Echo time of flight</td><td>~1 cm, wide beam</td><td>0.02–4 m</td><td>$2</td><td>&lt;0.1 W</td><td>Cheap, but one wide cone and no object identity</td></tr>
+</tbody></table></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Accuracy, cost and power ranges are typical datasheet-class values, rounded <span class="tag t-est">estimate</span>.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="approaches">
+<h2><span class="n">04</span>Technical approaches</h2>
+
+<h3>Approach A · Geometric distance estimation</h3>
+<figure>
+<div class="plate small"><img src="assets/diagrams/fig_pinhole_geometry.svg" alt="Pinhole camera with an object of height H at distance Z projecting to h pixels at focal length f"></div>
+<figcaption><b>Fig. 3</b> <span class="tag t-con">conceptual</span> Similar triangles: <span class="mono">h/f = H/Z</span>, so <span class="mono">Z = f·H/h</span>.</figcaption>
+</figure>
+<h4>A1 · Size prior (pinhole)</h4>
+<div class="eq">Z = f_y · H_class / h_px            (use box height for upright people; width for side-on cars)
+σ_Z / Z ≈ √[(σ_H/H)² + (σ_h/h)² + (σ_f/f)²]</div>
+<p>Typical class priors: adult 1.70 m (σ about 0.09 m across a mixed population), car height 1.5 m (width 1.8 m, length 4.5 m), dog shoulder height 0.25–0.85 m depending on breed. Example: at QVGA (f = 277 px) an adult at 10 m is about 47 px tall. A 2 px box error then adds about 4%, and the height prior adds about 5% (Fig. 5).</p>
+<h4>A2 · Ground plane (foot point)</h4>
+<figure>
+<div class="plate small"><img src="assets/diagrams/fig_ground_plane_geometry.svg" alt="Camera at height h_c tilted by pitch theta, with a ray through the object's foot point meeting the ground at distance D"></div>
+<figcaption><b>Fig. 4</b> <span class="tag t-con">conceptual</span> The ray through the bottom edge of the box meets the ground at D. This needs no knowledge of the object's size, only that it touches flat ground.</figcaption>
+</figure>
+<div class="eq">α = atan((y_bottom − c_y) / f_y)          D = h_c / tan(θ + α)
+∂D/∂(angle) = −(D² + h_c²)/h_c      →  error grows ≈ D²; a 0.5° pitch error at 10 m with h_c = 2 m is ≈ 0.45 m</div>
+<p>The ground-plane cue does not depend on object size, so it covers dogs, children and seated people where the size prior fails. It needs the feet to be visible and the ground flat. The camera must also be high enough for a usable angle: at 1 m mounting height the method degrades quickly beyond about 10 m.</p>
+<h4>Other geometric ingredients</h4>
+<ul>
+<li><b>Box centre and perspective.</b> Off-axis objects are farther than their optical-axis depth: range = <span class="mono">Z / cos(φ)</span>, where φ is the angle of the box centre from the optical axis.</li>
+<li><b>Orientation and pose.</b> A car's box width changes by up to 2.5× between front and side views, so use height for cars. Sitting people are about 0.55–0.65× standing height, which can be flagged by aspect ratio (h/w &lt; ~1.8).</li>
+<li><b>Truncation.</b> A box touching the frame edge gives a wrong height. Flag it and fall back to the other cue.</li>
+</ul>
+<figure>
+<div class="plate"><img src="assets/charts/05_error_budget_height_method.png" alt="Bar chart of error contributions for the height method at 10 m"></div>
+<figcaption><b>Fig. 5</b> <span class="tag t-est">computed</span> Error budget for the size-prior method, adult at 10 m, QVGA. The large bars are systematic: wrong class prior, pose and truncation. Averaging over time cannot remove them; a second cue or learned correction can.</figcaption>
+</figure>
+<figure>
+<div class="plate"><img src="assets/charts/03_error_model_vs_distance.png" alt="Line chart of distance error against true distance for three methods at two resolutions"></div>
+<figcaption><b>Fig. 6</b> <span class="tag t-est">Monte-Carlo error model, not measured</span> Median and 90th-percentile absolute error, adult standing, camera 2 m high and tilted 10° down. The ground-plane cue wins up close and the size cue holds up better far away at VGA. Fusing them by inverse variance is never worse than either alone. The rise in size-prior error below about 5 m comes from foreshortening: a tilted camera looking down at a nearby person sees a shorter box than f·H/Z. That bias is exactly what a learned residual corrects.</figcaption>
+</figure>
+<p><b>How accurate is geometry without a neural network?</b> For upright adults on flat ground with a calibrated camera, the model predicts a median of 2–5% and a 90th percentile of 5–14% over 4–15 m <span class="tag t-est">model</span>. For cars at a known orientation, expect about 10–20%. For dogs, the size prior alone is about ±40% because breeds vary so much; the ground-plane cue alone gives about 5–10% if the feet are visible. These numbers must be confirmed in Phase 1.</p>
+
+<h3>Approach B · Object-specific distance regression</h3>
+<p>A small network learns <span class="mono">distance = g(features)</span> per detection. The ancestor of this approach is DisNet (Haseeb et al. 2018): a 3-hidden-layer MLP of 100 units each, whose inputs are <span class="mono">1/h, 1/w, 1/diag</span> of the box plus class average sizes. That is about 21k parameters, computed from the stated layer sizes.</p>
+<div class="tbl"><table>
+<thead><tr><th>Variant</th><th>Inputs</th><th>Params</th><th>ESP32-S3 INT8</th></tr></thead>
+<tbody>
+<tr><td>Bbox MLP (DisNet-style)</td><td>1/h, 1/w, box centre (u,v), aspect, class one-hot, f, h<sub>c</sub>, θ</td><td class="num">2k–21k</td><td>Yes; under 1 ms per box <span class="tag t-est">estimate</span></td></tr>
+<tr><td>Residual MLP (recommended)</td><td>Same features plus the two geometric estimates; predicts log-ratio correction and log σ</td><td class="num">~5k</td><td>Yes</td></tr>
+<tr><td>Keypoint MLP (MonoLoco)</td><td>17 COCO keypoints from a pose network</td><td class="num">small MLP</td><td>The MLP fits; the pose network is the bottleneck</td></tr>
+<tr><td>Crop CNN</td><td>64×64 crop + box features → MobileNet-style trunk</td><td class="num">0.2–1 M</td><td>Marginal: tens to hundreds of ms per box <span class="tag t-est">estimate</span></td></tr>
+<tr><td>Detector head (Dist-YOLO)</td><td>Extra distance output per anchor, trained jointly</td><td class="num">+ ~1%</td><td>Feasible only if you retrain the S3 detector</td></tr>
+</tbody></table></div>
+<ul>
+<li><b>Loss.</b> Regress <span class="mono">log Z</span>, since distance errors are multiplicative, with a Gaussian or Laplace negative log-likelihood so the network also outputs σ (as MonoLoco does with a Laplace loss). An alternative is an L1 loss on the ratio <span class="mono">Z_pred/Z_true</span>.</li>
+<li><b>Generalization.</b> A pure-box regressor quietly learns the training camera's f, h<sub>c</sub> and θ. Feed them as inputs, or predict a correction factor on top of geometry. The residual form generalizes much better because the physics is built in.</li>
+<li><b>Data.</b> 2–5k labelled boxes from the deployment camera, or synthetic data (Section 08), is enough to train an MLP of this size.</li>
+</ul>
+<p><b>Verdict:</b> runs easily on the ESP32-S3 with INT8 (ESP-DL or TFLite Micro), and per-box cost is negligible next to the detector. It will beat pure geometry on systematic biases such as foreshortening, pose and class priors. It will not beat geometry on random noise, because both see the same box.</p>
+
+<h3>Approach C · Lightweight monocular depth networks</h3>
+<p>Small encoder–decoder CNNs predict a low-resolution depth map. FastDepth (MobileNet encoder with depthwise NNConv5 decoder, pruned with NetAdapt) reports 0.37 GMAC at 224×224, RMSE 0.604 m and δ<sub>1</sub> 0.771 on NYU Depth v2, at 178 FPS on a Jetson TX2 GPU and 27 FPS on its CPU <span class="tag t-pub">published</span>. Lite-Mono (3.1M parameters; 2.2M "tiny" variant) is a self-supervised CNN-Transformer hybrid trained on KITTI. Like Monodepth2, its outputs are only scale-correct after median scaling against ground truth, so it is relative depth unless fine-tuned with metric labels.</p>
+<p><b>On the S3:</b> FastDepth-class compute (0.37 GMAC), with 224×224 feature maps that spill into PSRAM, is estimated at about 0.7–5 s per frame <span class="tag t-est">estimate</span>. A purpose-built 64×48 depth head (about 20–50 MMAC) might reach 1–3 FPS, but no published ESP32 implementation exists. It is research, not engineering.</p>
+
+<h3>Approach D · Dense depth foundation models</h3>
+<div class="tbl"><table>
+<thead><tr><th>Model</th><th>Architecture / training</th><th>Output</th><th>Size</th><th>License</th><th>Deployment</th></tr></thead>
+<tbody>
+<tr><td>Depth Anything V2 (2024)</td><td>DINOv2 ViT encoder + DPT decoder; teacher trained on synthetic data, pseudo-labels 62M real images</td><td>Relative; Metric variants fine-tuned on Hypersim (indoor, ≤20 m) and Virtual KITTI 2 (outdoor, ≤80 m)</td><td class="num">24.8 / 97.5 / 335.3 M <span class="tag t-pub">pub</span></td><td>Small: Apache-2.0; larger: CC-BY-NC</td><td>Pi 5 (Small, slow), Hailo or Jetson</td></tr>
+<tr><td>Metric3D v2 (2024)</td><td>ViT (S/L/g2) + RAFT-style refinement; canonical camera space transform</td><td>Metric depth + surface normals; needs focal length</td><td class="num">ViT-S to ViT-g</td><td>BSD-2 (check repo)</td><td>Jetson / GPU</td></tr>
+<tr><td>Depth Pro (Apple, 2024)</td><td>Multi-scale ViT; also estimates focal length</td><td>Metric, sharp boundaries; 2.25 MP in 0.3 s on a V100 <span class="tag t-pub">pub</span></td><td class="num">ViT-L class</td><td>Apple sample-code license</td><td>Desktop GPU</td></tr>
+<tr><td>UniDepth V2 (2025)</td><td>ViT + camera module; self-prompting camera prediction</td><td>Metric, camera-free</td><td class="num">ViT-S/B/L</td><td>CC-BY-NC 4.0</td><td>Jetson / GPU</td></tr>
+<tr><td>ZoeDepth (2023)</td><td>MiDaS (BEiT/Swin) + metric bins module</td><td>Metric (NYU / KITTI heads)</td><td class="num">~345 M (BEiT-L)</td><td>MIT</td><td>GPU</td></tr>
+<tr><td>Marigold (CVPR 2024)</td><td>Stable Diffusion U-Net fine-tuned for depth; iterative denoising</td><td>Affine-invariant (relative)</td><td class="num">~0.9 B (SD 2)</td><td>Apache-2.0 code</td><td>GPU, seconds per image</td></tr>
+<tr><td>Monodepth2 (2019)</td><td>ResNet-18 encoder; self-supervised from video</td><td>Relative (median-scaled)</td><td class="num">14.3 M</td><td>Non-commercial (Niantic)</td><td>Pi (low res)</td></tr>
+<tr><td>Lite-Mono (2023)</td><td>CDC + LGFI CNN-Transformer hybrid</td><td>Relative (self-supervised)</td><td class="num">3.1 M <span class="tag t-pub">pub</span></td><td>see repo</td><td>Pi, Jetson</td></tr>
+<tr><td>FastDepth (2019)</td><td>MobileNet + NNConv5, pruned</td><td>Metric on NYU (indoor)</td><td class="num">0.37 GMAC</td><td>MIT (check repo)</td><td>Pi, Jetson; S3 impractical</td></tr>
+</tbody></table></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Only the 24.8/97.5/335.3 M DAv2 counts, FastDepth figures, Lite-Mono and Monodepth2 parameter counts, and the Depth Pro timing were re-checked against primary sources for this report. Verify the other sizes and licenses against each repository before relying on them.</p>
+<p><b>None of these run on an ESP32-S3.</b> A ViT-S has about 22M parameters, and its attention plus activation memory at 518 px input is far beyond the chip's RAM. Transformer operators (LayerNorm, GELU, softmax attention) are also poorly supported by MCU INT8 kernels. Their value here is offline: <b>pseudo-labelling training data</b> with metric distances, and acting as a <b>reference</b> for benchmarking the embedded method.</p>
+<figure>
+<div class="plate"><img src="assets/charts/01_model_size_vs_esp32s3_memory.png" alt="Bar chart of parameter count for each method on a log scale, with lines for SRAM, PSRAM and flash"></div>
+<figcaption><b>Fig. 7</b> Parameter counts (≈ MB of INT8 weights) against ESP32-S3 memory. Fitting in flash is necessary but nowhere near sufficient: compute and peak activation memory are the binding limits.</figcaption>
+</figure>
+
+<h3>Approach E · Temporal and motion-based estimation</h3>
+<ul>
+<li><b>Stationary camera (surveillance).</b> No ego-motion and no parallax for structure-from-motion, so temporal information helps by <i>filtering</i>, not by triangulating. Track each object (IoU or SORT), run a Kalman filter on inverse distance with a constant-velocity model, and reject outliers. Random jitter (σ<sub>h</sub>) shrinks roughly as 1/√N over N frames; bias does not. A second trick: accumulate foot points over hours to <b>self-calibrate the ground plane</b> (fit h<sub>c</sub> and θ from people of known average height walking through the scene).</li>
+<li><b>Moving camera (robot).</b> Monocular visual odometry and structure-from-motion recover depth only up to scale. Wheel odometry or an IMU supplies the metric baseline, and then triangulation across frames gives true metric depth for static objects. Moving objects break this. Optical flow and SfM are far beyond the S3's budget at useful resolution.</li>
+<li><b>Temporal consistency</b> in video-depth networks is a GPU-class technique and not relevant on the MCU.</li>
+</ul>
+
+<h3>Approach F · Hybrid estimation</h3>
+<div class="mer"><pre class="mermaid">
+flowchart LR
+  CAM["Camera frame"] --> DET["INT8 detector<br/>box, class, conf"]
+  DET --> GEO1["Size prior<br/>Z = f·H/h"]
+  DET --> GEO2["Ground plane<br/>D = hc / tan(θ+α)"]
+  DET --> FEAT["Box features<br/>u, v, w, h, aspect"]
+  GEO1 --> FUSE["Inverse-variance<br/>fusion"]
+  GEO2 --> FUSE
+  FEAT --> MLP["Residual MLP<br/>bias + σ"]
+  FUSE --> MLP
+  MLP --> KF["Tracker + Kalman<br/>on 1/Z"]
+  KF --> OUT["class · m · σ · ID"]
+  CAL[("Calibration<br/>K, hc, θ")] -.-> GEO1
+  CAL -.-> GEO2
+</pre></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Fig. 8 · Hybrid estimator data flow (conceptual)</p>
+<p>The most useful combinations, all ESP32-feasible:</p>
+<ol>
+<li>Size prior + ground plane, fused by inverse variance (Fig. 6).</li>
+<li>Item 1 plus a residual MLP that corrects pose, truncation and foreshortening bias and outputs σ.</li>
+<li>Item 2 plus a tracker and Kalman filter, giving stable readings and a reliability flag.</li>
+<li><i>Install-time</i> dense depth on a laptop (Depth Anything V2 Metric or Depth Pro) to cross-check h<sub>c</sub> and θ once. No dense model is needed at runtime.</li>
+</ol>
+</section>
+
+<!-- ============================================================ -->
+<section id="top5">
+<h2><span class="n">05</span>Top five approaches, ranked</h2>
+<p>The ranking weighs, in order: metric accuracy, ESP32-S3 feasibility, RAM and flash, and latency (all very high priority); then power, generalization, quantization, open source and ease of experimentation (high priority). The shortlist deliberately spans hybrid, geometric, regression, lightweight neural and metric foundation approaches.</p>
+<div class="tbl"><table>
+<thead><tr><th>#</th><th>Approach</th><th>Category</th><th>Metric accuracy</th><th>ESP32-S3</th><th>RAM / flash</th><th>Latency (S3)</th><th>Generalization</th><th>Open source</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>Hybrid: geometry + residual MLP + tracking</td><td>Hybrid</td><td>High (best on device)</td><td>Yes</td><td>&lt;50 KB beyond detector</td><td>&lt;1 ms + detector</td><td>Good, physics-based</td><td>Build (OpenCV, ESP-DL)</td></tr>
+<tr><td>2</td><td>Calibrated geometry (size + ground fusion)</td><td>Geometry</td><td>Medium–high on flat ground</td><td>Yes</td><td>~0</td><td>~µs</td><td>Good when assumptions hold</td><td>Trivial</td></tr>
+<tr><td>3</td><td>Bbox-feature regression (DisNet / MonoLoco family)</td><td>Regression</td><td>High on its own camera</td><td>Yes (MLP)</td><td>&lt;100 KB</td><td>&lt;1 ms</td><td>Weak across cameras unless intrinsics are inputs</td><td>MonoLoco repo; DisNet paper</td></tr>
+<tr><td>4</td><td>Lightweight depth: FastDepth / Lite-Mono</td><td>Light neural depth</td><td>Medium indoor (FastDepth); relative (Lite-Mono)</td><td>No (≥ s/frame)</td><td>MB activations</td><td>~0.7–5 s <span class="tag t-est">est</span></td><td>Weak outside training domain</td><td>Yes</td></tr>
+<tr><td>5</td><td>Depth Anything V2 Metric-Small (as teacher / Pi path)</td><td>Metric foundation</td><td>Good in-domain, scale drifts on odd cameras</td><td>No</td><td>~25 M params</td><td>n/a (Pi: seconds)</td><td>Best of all on images</td><td>Yes (Small: Apache-2.0)</td></tr>
+</tbody></table></div>
+
+<div class="rank">
+<article class="card">
+<div class="top"><span class="pos">1</span><h3>Hybrid geometric–learned estimator with tracking</h3><span class="tag t-pub">category: hybrid</span></div>
+<dl class="spec">
+<dt>Origin</dt><dd>A system design assembled for this project from DisNet (Haseeb et al. 2018), MonoLoco's uncertainty loss (Bertoni et al., ICCV 2019), and classic ground-plane and Kalman tracking.</dd>
+<dt>Working principle</dt><dd>Two physical cues give metres. A tiny network learns the remaining bias and a confidence. A tracker filters each object over time.</dd>
+<dt>Architecture</dt><dd>Detector → {size prior, ground plane} → inverse-variance fusion → residual MLP (~5k params, 2×32 hidden) → Kalman on 1/Z.</dd>
+<dt>Input / output</dt><dd>Box (u, v, w, h), class, conf, K, h<sub>c</sub>, θ → distance (m), σ (m), reliable flag, track ID.</dd>
+<dt>Depth type</dt><dd>Metric, per object.</dd>
+<dt>Accuracy</dt><dd>Fused geometry model: about 2–4% median at 4–10 m <span class="tag t-est">model</span>. Residual correction expected to remove the near-range and pose bias. Target for Phase 2: ≤8% median, ≤15% p90 at 2–15 m <span class="tag t-est">target</span>.</dd>
+<dt>Parameters / size</dt><dd>~5k parameters, about 5 KB INT8, plus a calibration struct of under 100 bytes.</dd>
+<dt>RAM</dt><dd>Under 50 KB including 32 tracks; the detector dominates.</dd>
+<dt>Latency</dt><dd>Under 1 ms for all objects <span class="tag t-est">est</span>, so end-to-end time is detector-bound at about 125 ms (ESP-DL pedestrian 224×224) <span class="tag t-pub">pub</span>.</dd>
+<dt>Quantization</dt><dd>MLP to INT8 with ESP-DL or TFLM. Geometry stays in float32, which the S3 handles in hardware.</dd>
+<dt>ESP32-S3</dt><dd><b>Yes.</b> Recommended.</dd>
+<dt>Raspberry Pi</dt><dd>Trivial. The same code runs at full camera rate.</dd>
+<dt>Limitations</dt><dd>Needs calibration and a measured mount. Assumes flat ground for the second cue. Seated or truncated people need flags. Generalizes only as far as its training-data mounts.</dd>
+<dt>License / repo</dt><dd>Your own code. Dependencies: <a href="https://github.com/espressif/esp-dl">ESP-DL</a> (MIT), <a href="https://github.com/espressif/esp-tflite-micro">esp-tflite-micro</a> (Apache-2.0).</dd>
+</dl>
+</article>
+
+<article class="card">
+<div class="top"><span class="pos">2</span><h3>Calibrated geometric estimation (size prior + ground plane)</h3><span class="tag t-pub">category: geometry</span></div>
+<dl class="spec">
+<dt>Origin</dt><dd>Pinhole model (classical); Zhang's calibration (IEEE TPAMI 2000); ground-plane ranging common in ADAS literature.</dd>
+<dt>Working principle</dt><dd>Similar triangles with a class height; ray–ground intersection with a known mount.</dd>
+<dt>Architecture</dt><dd>Closed-form equations (Section 04 A).</dd>
+<dt>Input / output</dt><dd>Box + K + h<sub>c</sub>, θ → Z (m) with analytic σ.</dd>
+<dt>Depth type</dt><dd>Metric, per object.</dd>
+<dt>Accuracy</dt><dd>Fig. 6 model: fused median 2.1% at 4 m, 3.8% at 10 m, 7.1% at 20 m (QVGA); p90 5–17% <span class="tag t-est">model</span>. No public benchmark exists for this exact setup.</dd>
+<dt>Parameters / size</dt><dd>0.</dd>
+<dt>RAM</dt><dd>Bytes.</dd>
+<dt>Latency</dt><dd>Microseconds per box <span class="tag t-est">est</span>.</dd>
+<dt>Quantization</dt><dd>Not applicable.</dd>
+<dt>ESP32-S3</dt><dd><b>Yes.</b></dd>
+<dt>Raspberry Pi</dt><dd>Yes.</dd>
+<dt>Limitations</dt><dd>Wrong class priors (children, dogs), pose, truncation, sloped ground, camera roll and lens distortion.</dd>
+<dt>License / repo</dt><dd>OpenCV calibration (<a href="https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html">tutorial</a>, Apache-2.0).</dd>
+</dl>
+</article>
+
+<article class="card">
+<div class="top"><span class="pos">3</span><h3>Object-specific distance regression (DisNet-style MLP; MonoLoco for people)</h3><span class="tag t-pub">category: regression</span></div>
+<dl class="spec">
+<dt>Origin</dt><dd>Haseeb et al., "DisNet: a novel method for distance estimation from monocular camera," PPNIV @ IROS 2018. Bertoni, Kreiss, Alahi, "MonoLoco," ICCV 2019. Zhu &amp; Fang, "Learning object-specific distance from a monocular image," ICCV 2019.</dd>
+<dt>Working principle</dt><dd>Learn the mapping from box geometry (or human keypoints) to distance directly from labelled examples.</dd>
+<dt>Architecture</dt><dd>DisNet: 6 inputs → 3×100 hidden → 1 output (about 21k parameters, computed). MonoLoco: a fully connected network with residual blocks over 2D keypoints and a Laplace-likelihood head for confidence intervals.</dd>
+<dt>Input / output</dt><dd>Box features or 17 keypoints → distance (+ σ for MonoLoco).</dd>
+<dt>Depth type</dt><dd>Metric, per object.</dd>
+<dt>Accuracy</dt><dd>MonoLoco reports beating prior monocular methods on KITTI and nuScenes, and outperforming a stereo baseline for distant pedestrians <span class="tag t-pub">pub</span>. DisNet reports results on its own non-public dataset. No cross-paper benchmark is comparable to this project's camera.</dd>
+<dt>Parameters / size</dt><dd>~2k–21k for a box MLP; MonoLoco's MLP is small, but its pose front end (OpenPifPaf) is tens of MB.</dd>
+<dt>RAM</dt><dd>Box MLP: a few KB. Pose front end: hundreds of MB, not for the MCU.</dd>
+<dt>Latency</dt><dd>Box MLP under 1 ms on the S3 <span class="tag t-est">est</span>.</dd>
+<dt>Quantization</dt><dd>Fully INT8-friendly (dense + ReLU).</dd>
+<dt>ESP32-S3</dt><dd><b>Box MLP: yes.</b> Keypoint variant: no; it needs a pose network.</dd>
+<dt>Raspberry Pi</dt><dd>Yes, including MonoLoco at low FPS on a Pi 5 <span class="tag t-est">est</span>.</dd>
+<dt>Limitations</dt><dd>Silently learns the training camera. Needs labelled distances. Poor extrapolation beyond the training range.</dd>
+<dt>License / repo</dt><dd><a href="https://github.com/vita-epfl/monoloco">vita-epfl/monoloco</a> (check license); DisNet has no official code.</dd>
+</dl>
+</article>
+
+<article class="card">
+<div class="top"><span class="pos">4</span><h3>Lightweight monocular depth: FastDepth and Lite-Mono</h3><span class="tag t-pub">category: lightweight neural depth</span></div>
+<dl class="spec">
+<dt>Origin</dt><dd>Wofk, Ma, Yang, Karaman, Sze, "FastDepth," ICRA 2019. Zhang, Nex, Vosselman, Kerle, "Lite-Mono," CVPR 2023.</dd>
+<dt>Working principle</dt><dd>An encoder–decoder CNN (FastDepth) or a CNN-Transformer hybrid (Lite-Mono) regresses a depth map; boxes are then aggregated with a median.</dd>
+<dt>Architecture</dt><dd>FastDepth: MobileNet-v1 encoder, depthwise NNConv5 decoder, skip connections, NetAdapt pruning. Lite-Mono: Consecutive Dilated Convolutions + Local-Global Feature Interaction (attention) modules.</dd>
+<dt>Input / output</dt><dd>224×224 RGB (FastDepth); 640×192 (Lite-Mono) → dense depth.</dd>
+<dt>Depth type</dt><dd>FastDepth: metric (trained supervised on NYU, indoor). Lite-Mono: relative (self-supervised).</dd>
+<dt>Accuracy</dt><dd>FastDepth: RMSE 0.604 m, δ<sub>1</sub> 0.771 on NYU v2 <span class="tag t-pub">pub</span>. Lite-Mono: lower error than Monodepth2 with about 80% fewer parameters on KITTI <span class="tag t-pub">pub</span>.</dd>
+<dt>Parameters / size</dt><dd>FastDepth 0.37 GMAC (≈1.3 M parameters after pruning, check paper). Lite-Mono 3.1 M, tiny 2.2 M <span class="tag t-pub">pub</span>.</dd>
+<dt>RAM</dt><dd>First-layer activations alone are 224×224×32 bytes = 1.6 MB at INT8.</dd>
+<dt>Latency</dt><dd>TX2 GPU 5.6 ms; TX2 CPU 37 ms <span class="tag t-pub">pub</span>. ESP32-S3: about 0.7–5 s <span class="tag t-est">est</span>.</dd>
+<dt>Quantization</dt><dd>FastDepth: standard ops, INT8-friendly. Lite-Mono: attention and LayerNorm complicate MCU INT8.</dd>
+<dt>ESP32-S3</dt><dd><b>Not practical</b> at useful rates. A custom 64×48 head is unproven.</dd>
+<dt>Raspberry Pi</dt><dd>Yes. Several FPS is plausible for FastDepth on a Pi 5 CPU with NCNN or ONNX Runtime <span class="tag t-est">est</span>; the Hailo Model Zoo also lists depth models.</dd>
+<dt>Limitations</dt><dd>Indoor or driving training domains. Box aggregation is unreliable at object edges.</dd>
+<dt>License / repo</dt><dd><a href="https://github.com/dwofk/fast-depth">dwofk/fast-depth</a>, <a href="https://github.com/noahzn/Lite-Mono">noahzn/Lite-Mono</a> (check each license).</dd>
+</dl>
+</article>
+
+<article class="card">
+<div class="top"><span class="pos">5</span><h3>Depth Anything V2 Metric (Small) as teacher and Pi path</h3><span class="tag t-pub">category: metric foundation model</span></div>
+<dl class="spec">
+<dt>Origin</dt><dd>Yang et al., "Depth Anything V2," NeurIPS 2024 (arXiv 2406.09414).</dd>
+<dt>Working principle</dt><dd>Large-scale distillation: a ViT-g teacher trained only on precise synthetic depth pseudo-labels 62M real images, which train smaller students; metric heads are fine-tuned on Hypersim and Virtual KITTI.</dd>
+<dt>Architecture</dt><dd>DINOv2 ViT-S encoder + DPT decoder.</dd>
+<dt>Input / output</dt><dd>RGB, 518 px short side by default → dense metric depth.</dd>
+<dt>Depth type</dt><dd>Relative (base) or metric (fine-tuned, indoor ≤20 m and outdoor ≤80 m checkpoints).</dd>
+<dt>Accuracy</dt><dd>State of the art among relative-depth models on standard zero-shot benchmarks <span class="tag t-pub">pub</span>. Metric accuracy degrades when the camera differs from the training domain; it does not take intrinsics as input.</dd>
+<dt>Parameters / size</dt><dd>24.8 M (Small) <span class="tag t-pub">pub</span>, about 100 MB in FP32.</dd>
+<dt>RAM</dt><dd>Hundreds of MB at runtime.</dd>
+<dt>Latency</dt><dd>No verified Raspberry Pi 5 figure was found. Expect seconds per frame on the Pi CPU at reduced input sizes; benchmark it yourself <span class="tag t-est">est</span>.</dd>
+<dt>Quantization</dt><dd>FP16 or INT8 via TensorRT on Jetson; ViT INT8 needs care.</dd>
+<dt>ESP32-S3</dt><dd><b>No.</b></dd>
+<dt>Raspberry Pi</dt><dd>Workable offline or at about 0.2–1 FPS for low-rate verification <span class="tag t-est">est</span>.</dd>
+<dt>Limitations</dt><dd>Domain-dependent metric scale; heavy; licenses vary by size and checkpoint.</dd>
+<dt>License / repo</dt><dd><a href="https://github.com/DepthAnything/Depth-Anything-V2">DepthAnything/Depth-Anything-V2</a>. Small checkpoints are Apache-2.0; others are non-commercial. Check each model card.</dd>
+</dl>
+</article>
+</div>
+
+<figure>
+<div class="plate"><img src="assets/charts/02_latency_published_vs_estimated.png" alt="Bar chart of inference latency on a log scale"></div>
+<figcaption><b>Fig. 9</b> Latency figures. Teal bars are published (each on its own hardware: esp-nn README, ESP-DL component README, FastDepth paper). Gold bars are estimates. Do not read across hardware rows as like-for-like.</figcaption>
+</figure>
+</section>
+
+<!-- ============================================================ -->
+<section id="hardware">
+<h2><span class="n">06</span>Edge deployment feasibility</h2>
+
+<h3>A · ESP32-S3</h3>
+<figure>
+<div class="plate small"><img src="assets/diagrams/fig_esp32s3_memory_budget.svg" alt="ESP32-S3 memory map showing SRAM, PSRAM and flash usage"></div>
+<figcaption><b>Fig. 10</b> <span class="tag t-con">schematic</span> Where things live on the S3. The peak activation tensor, not the weight count, decides whether a model fits.</figcaption>
+</figure>
+<ul>
+<li><b>Compute.</b> Two LX7 cores at 240 MHz with the PIE 128-bit SIMD extension (INT8/INT16 MACs). ESP-NN and ESP-DL ship hand-optimized kernels for it.</li>
+<li><b>Memory.</b> 512 KB SRAM shared with the RTOS and Wi-Fi. PSRAM (commonly 8 MB octal) holds frame buffers and large tensors at a significant speed penalty. Weights execute from flash through the cache.</li>
+<li><b>Measured throughput.</b> The TFLM person-detection example (96×96 grayscale) runs in 47 ms with ESP-NN in recent esp-nn READMEs (54 ms in older tables) versus 2300 ms with plain C kernels <span class="tag t-pub">pub</span>. ESP-DL's <code>pedestrian_detect</code> (224×224×3, INT8) lists about 10.6 + 113.3 + 1.1 ms for pre-processing, model and post-processing <span class="tag t-pub">pub</span>. <code>espdet_pico</code> lists 126.2 ms and ">7 FPS" at 224×224 <span class="tag t-pub">pub</span>. These exclude camera capture and Wi-Fi.</li>
+<li><b>Operators.</b> Conv, depthwise conv, pooling, add, concat, ReLU and dense are well supported. Attention, LayerNorm, GELU and large upsampling decoders are poorly supported or slow. In practice that means CNNs yes, Transformers no.</li>
+<li><b>Power.</b> An S3 with camera and Wi-Fi active typically draws a few hundred mA at 3.3–5 V, roughly 0.5–1.5 W <span class="tag t-est">estimate</span>. Measure it with a USB power meter in Phase 4.</li>
+<li><b>The original ESP32 (ESP32-CAM)</b> lacks the SIMD extension, and the same models run several times slower. If the Night Sentinel hardware is a classic ESP32-CAM, budget for an S3 board (XIAO ESP32S3 Sense, ESP32-S3-EYE or a Freenove S3 CAM).</li>
+</ul>
+<div class="tbl"><table>
+<thead><tr><th>Capability on ESP32-S3</th><th>Feasible?</th><th>Evidence</th></tr></thead>
+<tbody>
+<tr><td>1. Object detection</td><td><b>Yes</b>, about 7–8 FPS at 224×224 for person/pedestrian; multi-class COCO detectors are slower</td><td>ESP-DL READMEs <span class="tag t-pub">pub</span></td></tr>
+<tr><td>2. Geometric distance</td><td><b>Yes</b>, negligible cost</td><td>Closed-form maths</td></tr>
+<tr><td>3. Small NN regression</td><td><b>Yes</b>, under 1 ms per box</td><td>Op count about 10k MAC <span class="tag t-est">est</span></td></tr>
+<tr><td>4. Low-res depth map (≤64×48)</td><td><b>Marginal / research</b>, plausibly 1–3 FPS for a custom tiny network; unverified</td><td>No public implementation <span class="tag t-est">est</span></td></tr>
+<tr><td>5. Dense depth map (≥224 px)</td><td><b>No</b> at useful rates; seconds per frame and PSRAM-bound</td><td>0.37 GMAC FastDepth vs. measured S3 throughput <span class="tag t-est">est</span></td></tr>
+</tbody></table></div>
+
+<h3>B · Raspberry Pi 4 and 5</h3>
+<div class="mer"><pre class="mermaid">
+flowchart LR
+  CSI["CSI camera<br/>libcamera / Picamera2"] --> ISP["ISP<br/>Pi 5: RP1 + BCM2712"]
+  ISP --> CPU["4× Cortex-A76 2.4 GHz<br/>Pi 4: 4× A72 1.5–1.8 GHz"]
+  CPU --> RT["NCNN · ONNX Runtime · TFLite<br/>INT8 / FP16 NEON"]
+  CPU <--> MEM["LPDDR4X 2–16 GB"]
+  CPU -- "PCIe 2.0 x1" --> NPU["Optional Hailo-8L<br/>AI Kit / AI HAT+"]
+  RT --> OUT["Distances over<br/>MQTT / UART"]
+  NPU --> OUT
+</pre></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Fig. 11 · Raspberry Pi inference path (conceptual)</p>
+<ul>
+<li><b>CPU inference.</b> NCNN and ONNX Runtime with INT8 or FP16 NEON kernels. A Pi 5 is commonly reported at about 2–3× a Pi 4 for CNN inference <span class="tag t-est">est</span>. Small YOLO detectors (n-size, 320–640 px) reach several to ~20 FPS on a Pi 5 CPU depending on export and resolution; FastDepth-class depth should reach several FPS; DAv2-Small takes seconds per frame <span class="tag t-est">est</span>. One paper benchmarks DAv2 with PyTorch, ONNX Runtime and NCNN, but no verified Pi 5 number was found.</li>
+<li><b>Accelerator.</b> The Raspberry Pi AI Kit / AI HAT+ (Hailo-8L, 13 TOPS; Hailo-8, 26 TOPS) runs compiled CNNs at real-time rates. The Hailo Model Zoo includes depth-estimation networks. Transformer support is limited.</li>
+<li><b>Memory.</b> 4 GB is enough for every model here except large ViTs at full resolution.</li>
+</ul>
+
+<h3>C · NVIDIA Jetson</h3>
+<div class="mer"><pre class="mermaid">
+flowchart LR
+  CAM2["CSI / USB camera"] --> ISP2["ISP + VIC"]
+  ISP2 --> GPU["Ampere GPU<br/>Orin Nano: 1024 CUDA cores"]
+  GPU <--> UM["Unified LPDDR5<br/>4–8 GB, shared CPU/GPU"]
+  CPU2["6× Cortex-A78AE"] <--> UM
+  TRT["TensorRT engine<br/>FP16 / INT8"] --> GPU
+  GPU --> OUT2["Depth + detection<br/>real-time"]
+</pre></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Fig. 12 · Jetson Orin Nano inference path (conceptual)</p>
+<ul>
+<li><b>Orin Nano</b> (8 GB): rated 40 TOPS, or 67 TOPS in "Super" mode, with selectable 7 W / 15 W / 25 W power modes. TensorRT FP16 runs ViT-S depth models at interactive rates and YOLO detectors at tens to hundreds of FPS <span class="tag t-est">est; benchmark per model</span>.</li>
+<li><b>Original Jetson Nano</b> (Maxwell, 4 GB, 5–10 W) is stuck on JetPack 4 and an old TensorRT. CNNs only; avoid it for new work.</li>
+<li>FastDepth's published 178 FPS was on the older Jetson TX2 GPU <span class="tag t-pub">pub</span>.</li>
+</ul>
+
+<h3>Deployment comparison</h3>
+<figure>
+<div class="plate"><img src="assets/charts/06_hardware_feasibility_matrix.png" alt="Feasibility matrix of tasks against platforms"></div>
+<figcaption><b>Fig. 13</b> <span class="tag t-est">assessment</span> Hardware feasibility matrix, combining the published figures above with engineering estimates.</figcaption>
+</figure>
+<figure>
+<div class="plate"><img src="assets/charts/07_cost_vs_power.png" alt="Cost against power for each platform"></div>
+<figcaption><b>Fig. 14</b> <span class="tag t-est">approximate</span> Hardware cost against power. The ESP32-S3 sits one order of magnitude below the Pi on both axes.</figcaption>
+</figure>
+<div class="tbl"><table>
+<thead><tr><th>Platform</th><th>Detector</th><th>Geometry / MLP</th><th>Dense metric depth</th><th>Power</th><th>Approx. cost</th></tr></thead>
+<tbody>
+<tr><td>ESP32-S3</td><td>~7–8 FPS person @224 <span class="tag t-pub">pub</span></td><td>Free</td><td>No</td><td>0.5–1.5 W</td><td>$10–20</td></tr>
+<tr><td>Pi 4</td><td>A few FPS (small YOLO)</td><td>Free</td><td>FastDepth-class only</td><td>3–6 W</td><td>~$60 + cam</td></tr>
+<tr><td>Pi 5</td><td>~5–20 FPS small YOLO, CPU</td><td>Free</td><td>FastDepth-class ok; DAv2-S slow</td><td>3.5–8 W</td><td>~$60–80 + cam</td></tr>
+<tr><td>Pi 5 + Hailo-8L</td><td>Real-time</td><td>Free</td><td>CNN depth real-time</td><td>5–10 W</td><td>+ ~$70</td></tr>
+<tr><td>Jetson Orin Nano</td><td>Real-time</td><td>Free</td><td>ViT-S/B metric depth</td><td>7–25 W</td><td>~$250</td></tr>
+</tbody></table></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Pi and Jetson FPS ranges are estimates from typical community benchmarks. Verify them on your own export before planning around them.</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="applications">
+<h2><span class="n">07</span>Existing applications and implementations</h2>
+<div class="tbl"><table>
+<thead><tr><th>Implementation</th><th>Hardware</th><th>Method</th><th>Range / accuracy (as reported)</th><th>Speed</th><th>Type</th></tr></thead>
+<tbody>
+<tr><td><a href="https://github.com/vita-epfl/monoloco">MonoLoco</a> (EPFL VITA, ICCV 2019)</td><td>GPU; pose front end</td><td>Pose keypoints → MLP + Laplace σ</td><td>Pedestrians on KITTI and nuScenes; beats a stereo baseline at long range</td><td>Real-time on GPU</td><td><b>Genuine object distance</b></td></tr>
+<tr><td>DisNet (Haseeb et al. 2018)</td><td>PC; railway and road cameras</td><td>YOLO box features → MLP</td><td>Own dataset; long-range obstacles</td><td>n/r</td><td><b>Genuine object distance</b></td></tr>
+<tr><td>Dist-YOLO (Vajgl et al., Applied Sciences 2022)</td><td>GPU</td><td>YOLOv3 with per-box distance output</td><td>KITTI objects</td><td>~YOLO speed</td><td><b>Genuine object distance</b></td></tr>
+<tr><td>Zhu &amp; Fang, ICCV 2019</td><td>GPU</td><td>ROI features + keypoint regressor</td><td>KITTI object distance dataset</td><td>n/r</td><td><b>Genuine object distance</b></td></tr>
+<tr><td>Hobbyist "distance with OpenCV" (pinhole + known width)</td><td>Pi 3/4, laptop webcams</td><td>Size prior, single class (faces, A4 sheet)</td><td>Typically under 10% at 0.5–5 m, controlled scenes; rarely rigorously measured</td><td>Real-time</td><td><b>Genuine</b>, single class</td></tr>
+<tr><td>FastDepth demos</td><td>Jetson TX2</td><td>Dense depth CNN</td><td>NYU indoor RMSE 0.604 m</td><td>178 FPS GPU <span class="tag t-pub">pub</span></td><td>Dense metric (indoor)</td></tr>
+<tr><td>Depth Anything / MiDaS on Pi (community)</td><td>Pi 4 / 5</td><td>Relative depth</td><td>No metres</td><td>Seconds per frame</td><td>Relative only</td></tr>
+<tr><td>ESP-DL pedestrian / espdet examples</td><td>ESP32-S3-EYE, ESP32-P4</td><td>INT8 detector</td><td>Detection only</td><td>~125 ms @224 <span class="tag t-pub">pub</span></td><td>Detection, no distance</td></tr>
+<tr><td>Plumerai People Detection</td><td>ESP32-S3</td><td>Commercial people detector</td><td>Detection only</td><td>303 ms (3.3 FPS) reported</td><td>Detection, no distance</td></tr>
+</tbody></table></div>
+<div class="callout"><h4>Gap in the record</h4><p>No published, measured ESP32-class implementation of per-object metric distance was found. The detector half exists from Espressif with vendor latency figures. The ranging half (geometry or MLP) is light, but its accuracy on this camera class has not been reported. Phase 1 of this project would fill that gap.</p></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="datasets">
+<h2><span class="n">08</span>Datasets and training strategy</h2>
+<div class="tbl"><table>
+<thead><tr><th>Dataset</th><th>Domain</th><th>Ground truth</th><th>Boxes</th><th>Calibration</th><th>Night</th><th>Fit for object distance</th></tr></thead>
+<tbody>
+<tr><td><a href="https://www.cvlibs.net/datasets/kitti/">KITTI</a></td><td>Outdoor driving</td><td>Sparse LiDAR; 3D boxes give object range</td><td>Car, pedestrian, cyclist (2D + 3D)</td><td>Full</td><td>No</td><td><b>High</b>: standard for object distance</td></tr>
+<tr><td><a href="https://www.nuscenes.org/">nuScenes</a> / <a href="https://waymo.com/open/">Waymo Open</a></td><td>Outdoor driving</td><td>LiDAR + 3D boxes</td><td>Many classes incl. pedestrians, some animals</td><td>Full</td><td><b>Yes</b></td><td><b>High</b>, includes night</td></tr>
+<tr><td><a href="https://cs.nyu.edu/~fergus/datasets/nyu_depth_v2.html">NYU Depth V2</a></td><td>Indoor</td><td>Kinect v1 dense, ≤10 m</td><td>Instance labels on 1449 frames</td><td>Yes</td><td>No</td><td>Medium: indoor, few people</td></tr>
+<tr><td><a href="https://diode-dataset.org/">DIODE</a></td><td>Indoor + outdoor</td><td>Laser scanner, dense, accurate</td><td>No</td><td>Yes</td><td>No</td><td>Low: no objects</td></tr>
+<tr><td><a href="https://github.com/apple/ml-hypersim">Hypersim</a></td><td>Synthetic indoor</td><td>Exact per pixel</td><td>Instance masks → boxes</td><td>Yes</td><td>Rendered</td><td>Medium: no people</td></tr>
+<tr><td><a href="https://theairlab.org/tartanair-dataset/">TartanAir</a></td><td>Synthetic (AirSim)</td><td>Exact depth, pose</td><td>Segmentation</td><td>Yes</td><td>Some</td><td>Low–medium</td></tr>
+<tr><td><a href="https://www.eth3d.net/">ETH3D</a></td><td>Mixed</td><td>High-precision laser</td><td>No</td><td>Yes</td><td>No</td><td>Benchmark only</td></tr>
+<tr><td><a href="https://www.cs.cornell.edu/projects/megadepth/">MegaDepth</a></td><td>Internet photos</td><td>SfM, scale-free</td><td>No</td><td>Partial</td><td>No</td><td>Relative depth only</td></tr>
+<tr><td><a href="https://carla.org/">CARLA</a> (simulator)</td><td>Synthetic outdoor</td><td>Exact, any sensor</td><td>Pedestrians, vehicles; exact 3D</td><td>You set it</td><td><b>Yes</b> (weather and time of day)</td><td><b>High</b> for synthetic person distance</td></tr>
+</tbody></table></div>
+
+<h3>Synthetic data</h3>
+<p>Yes, synthetic images with exact distances can train the regression model, and it is a good fit. The residual MLP only sees box geometry, not pixels, so the domain gap is small: if the detector's boxes on real images resemble the synthetic boxes, the regressor transfers. Recommended setup:</p>
+<ul>
+<li><b>Blender + BlenderProc</b> with rigged humans (MakeHuman or Mixamo), dog and car meshes. Set the camera to your calibrated K, h<sub>c</sub> and θ. Randomize object height (children to tall adults), pose (stand, walk, sit, crouch), lighting and ground slope (±5°). Export exact range and the tight 2D box.</li>
+<li><b>CARLA</b> (Unreal-based) for outdoor pedestrians and vehicles with weather and night; read distances from the actor transforms.</li>
+<li><b>AirSim</b> is archived by Microsoft. Prefer CARLA or Blender for new work.</li>
+<li>Add realistic box noise: run your actual detector on rendered RGB, or jitter the ideal boxes with the measured σ from Phase 1.</li>
+</ul>
+
+<h3>Practical data collection with the real camera</h3>
+<figure>
+<div class="plate"><img src="assets/charts/09_test_range_layout.png" alt="Top-view layout of a test range with distance marks from 1 to 20 metres"></div>
+<figcaption><b>Fig. 15</b> <span class="tag t-con">setup</span> Ground-truth test range. Tape marks at fixed distances, verified with a laser rangefinder (±2 mm class), camera on a tripod with logged height and pitch.</figcaption>
+</figure>
+<ol>
+<li>Mount the S3 camera at the deployment height (e.g. 2.0 m) and tilt. Record h<sub>c</sub> with a tape and θ with a phone inclinometer, checked against the horizon row in the image.</li>
+<li>Mark 1, 2, 3, 4, 5, 7, 10, 12, 15, 20 m along the axis and at ±1 m and ±2 m lateral offsets. Measure each mark's range with the laser.</li>
+<li>Record 3–5 people of different heights (include a child if possible), a dog and a car at each mark: facing, side-on, walking, sitting. Capture at QVGA and VGA in day, dusk and IR night.</li>
+<li>Auto-label boxes with a large detector on a PC (YOLO or RF-DETR), correct by hand, and attach the mark distance. Aim for 3–5k boxes across 3 sessions.</li>
+<li>Split by <b>session and location</b>, not by frame, so that test scenes are unseen.</li>
+<li>Optionally pseudo-label extra unconstrained footage with Depth Anything V2 Metric or Depth Pro, after checking their bias against your laser-measured frames.</li>
+</ol>
+</section>
+
+<!-- ============================================================ -->
+<section id="architectures">
+<h2><span class="n">09</span>Proposed system architectures</h2>
+
+<h3>Architecture 1 · ESP32-only</h3>
+<div class="mer"><pre class="mermaid">
+flowchart LR
+  S["OV2640 / OV3660<br/>QVGA RGB565"] --> P["Resize 224×224<br/>ESP-DL preprocess"]
+  P --> D["INT8 detector<br/>pedestrian / espdet"]
+  D --> G["Geometry<br/>size + ground"]
+  G --> M["Residual MLP<br/>INT8, ~5k params"]
+  M --> T["IoU tracker<br/>+ Kalman 1/Z"]
+  T --> O["JSON via UART / MQTT<br/>optional JPEG preview"]
+</pre></div>
+<div class="tbl"><table><tbody>
+<tr><td><b>Hardware</b></td><td>ESP32-S3 with 8 MB PSRAM and OV2640/OV3660 (XIAO ESP32S3 Sense, ESP32-S3-EYE or similar)</td></tr>
+<tr><td><b>Software</b></td><td>ESP-IDF 5.x, esp32-camera, ESP-DL (or esp-tflite-micro + ESP-NN), cJSON, MQTT client</td></tr>
+<tr><td><b>Memory</b></td><td>2 × 150 KB frame buffers in PSRAM; detector arena in SRAM/PSRAM; estimator + tracker under 50 KB <span class="tag t-est">est</span></td></tr>
+<tr><td><b>Latency / FPS</b></td><td>About 125 ms detector <span class="tag t-pub">pub</span> + capture + about 1 ms ranging → roughly 5–7 FPS <span class="tag t-est">est</span></td></tr>
+<tr><td><b>Power</b></td><td>About 0.5–1.5 W <span class="tag t-est">est</span></td></tr>
+<tr><td><b>Expected accuracy</b></td><td>Standing adults, flat ground, 2–15 m: median about 5–10% per frame, improved by tracking. Dogs and cars via the ground-plane cue: 10–20% <span class="tag t-est">target</span></td></tr>
+<tr><td><b>Extra cost</b></td><td>$0 if an S3 board is on hand; otherwise $15–25</td></tr>
+<tr><td><b>Advantages</b></td><td>Cheapest, lowest power, fully standalone, no network dependency</td></tr>
+<tr><td><b>Limitations</b></td><td>Person-only detectors are fastest, and multi-class COCO detection on the S3 is slower. Short range at QVGA beyond about 15 m. Needs a calibrated mount.</td></tr>
+</tbody></table></div>
+
+<h3>Architecture 2 · ESP32 + Raspberry Pi</h3>
+<div class="mer"><pre class="mermaid">
+flowchart LR
+  subgraph ESP["ESP32-S3 node"]
+    S2["Camera VGA"] --> J["JPEG encode"]
+    J --> W["Wi-Fi stream<br/>MJPEG / RTSP-lite"]
+  end
+  subgraph PI["Raspberry Pi 5"]
+    R["Decode"] --> Y["YOLO-n detector<br/>NCNN / Hailo"]
+    R --> Dp["Metric depth<br/>FastDepth or DAv2-S"]
+    Y --> F["Fuse: box median depth<br/>+ geometry + tracker"]
+    Dp --> F
+    F --> O2["MQTT / dashboard"]
+  end
+  W --> R
+</pre></div>
+<div class="tbl"><table><tbody>
+<tr><td><b>Hardware</b></td><td>ESP32-S3 camera node + Pi 5 (4 GB); optional Hailo-8L AI Kit</td></tr>
+<tr><td><b>Software</b></td><td>ESP: esp32-camera + HTTP MJPEG. Pi: Python, OpenCV, NCNN or ONNX Runtime (or hailo-apps), MQTT</td></tr>
+<tr><td><b>Memory</b></td><td>Pi: 0.5–2 GB depending on depth model</td></tr>
+<tr><td><b>Latency / FPS</b></td><td>Wi-Fi 50–150 ms + Pi inference. With DAv2-S on CPU about 0.2–1 FPS; with FastDepth or Hailo several to 20+ FPS <span class="tag t-est">est</span></td></tr>
+<tr><td><b>Power</b></td><td>ESP 0.5–1.5 W + Pi 4–10 W <span class="tag t-est">est</span></td></tr>
+<tr><td><b>Expected accuracy</b></td><td>In-domain, similar to or slightly better than Architecture 1 thanks to a stronger detector and many classes. Dense depth helps where the ground plane is invalid (stairs, slopes), but needs scale-checking against geometry.</td></tr>
+<tr><td><b>Extra cost</b></td><td>$80–155 (Pi 5 + PSU + SD, optional Hailo)</td></tr>
+<tr><td><b>Advantages</b></td><td>Many classes, room to experiment, dense depth available for research</td></tr>
+<tr><td><b>Limitations</b></td><td>Not standalone; Wi-Fi latency and dropouts; 10× the power; the foundation model's metric scale still needs validation</td></tr>
+</tbody></table></div>
+
+<h3>Architecture 3 · Hybrid embedded (recommended)</h3>
+<div class="mer"><pre class="mermaid">
+flowchart TB
+  subgraph ONCE["Install time · laptop, once"]
+    C1["Checkerboard calibration<br/>K, distortion"] --> C2["Measure hc, θ<br/>check with horizon"]
+    C2 --> C3["Optional: DAv2 / Depth Pro<br/>sanity-check ground plane"]
+    C3 --> C4["Write calib.bin<br/>to flash"]
+  end
+  subgraph RUN["Runtime · ESP32-S3"]
+    A["Capture QVGA"] --> B["INT8 detector"]
+    B --> E1["Size-prior Z + σ"]
+    B --> E2["Ground-plane D + σ<br/>if feet visible"]
+    E1 --> FU["Fuse"]
+    E2 --> FU
+    FU --> RM["Residual MLP<br/>bias + σ"]
+    RM --> TK["Tracker + Kalman"]
+    TK --> RL["Reliability rules<br/>truncated, sitting, σ too large"]
+    RL --> OUT3["class · conf · m · σ · ID · ok"]
+  end
+  subgraph LEARN["Offline training · PC"]
+    L1["Test-range + synthetic data"] --> L2["Train residual MLP"]
+    L2 --> L3["INT8 export<br/>ESP-DL / TFLM"]
+  end
+  C4 -.-> E1
+  C4 -.-> E2
+  L3 -.-> RM
+</pre></div>
+<div class="tbl"><table><tbody>
+<tr><td><b>Hardware</b></td><td>Same as Architecture 1. A laptop for calibration and training. No runtime co-processor.</td></tr>
+<tr><td><b>Software</b></td><td>ESP-IDF + ESP-DL; Python (OpenCV, PyTorch, Blender/CARLA) offline</td></tr>
+<tr><td><b>Memory</b></td><td>As Architecture 1, plus about 5 KB MLP and under 100 B calibration</td></tr>
+<tr><td><b>Latency / FPS</b></td><td>As Architecture 1 (about 5–7 FPS) <span class="tag t-est">est</span></td></tr>
+<tr><td><b>Power</b></td><td>About 0.5–1.5 W <span class="tag t-est">est</span></td></tr>
+<tr><td><b>Expected accuracy</b></td><td>Best on-device: median ≤8% and p90 ≤15% at 2–15 m for people <span class="tag t-est">target</span>, plus an honest σ and a reliability flag</td></tr>
+<tr><td><b>Extra cost</b></td><td>$0–25 hardware; $20–40 laser rangefinder for ground truth</td></tr>
+<tr><td><b>Advantages</b></td><td>Standalone, physics-grounded, explainable failure modes, a cheap upgrade path</td></tr>
+<tr><td><b>Limitations</b></td><td>Re-calibrate if the camera moves; flat-ground assumption; detector class coverage limits what can be ranged</td></tr>
+</tbody></table></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="plan">
+<h2><span class="n">10</span>Experimental and validation plan</h2>
+<div class="mer"><pre class="mermaid">
+flowchart LR
+  P1["Phase 1<br/>Geometric baseline"] --> P2["Phase 2<br/>Regression"]
+  P2 --> P3["Phase 3<br/>Depth benchmark"]
+  P2 --> P4["Phase 4<br/>Embedded deploy"]
+  P3 -.-> P4
+  P4 --> P5["Phase 5<br/>Robustness"]
+  P5 --> P6["Phase 6<br/>Prototype"]
+</pre></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Fig. 16 · Phase dependencies. Phase 3 informs Phase 4 but does not block it.</p>
+<div class="two">
+<div class="phase"><h4>Phase 1 · Geometric baseline</h4>
+<ul><li>Calibrate with a 9×6 checkerboard and 20–30 views per resolution (OpenCV).</li><li>Record f<sub>x</sub>, f<sub>y</sub>, c<sub>x</sub>, c<sub>y</sub>, distortion; measure h<sub>c</sub> and θ.</li><li>Implement the size prior, ground plane and fusion on a PC against recorded frames, then on the S3.</li><li>Test person, car and dog at all marks (Fig. 15).</li></ul>
+<div class="acc"><b>Accept:</b> reprojection error &lt;0.5 px; adult standing, 2–15 m, median absolute error ≤10% and p90 ≤20%; results plotted as in Fig. 17.</div></div>
+<div class="phase"><h4>Phase 2 · Regression</h4>
+<ul><li>Build a dataset: 3–5k real boxes + 20k synthetic boxes.</li><li>Train a box MLP, a residual MLP and a crop CNN; ablate the input features.</li><li>Evaluate on held-out sessions and on a second camera mount.</li><li>Quantize to INT8 and measure the accuracy drop.</li></ul>
+<div class="acc"><b>Accept:</b> residual MLP beats Phase 1 median by ≥20% relative; INT8 drop ≤1 percentage point; σ calibrated (68% of errors within 1σ, ±10%); model ≤20 KB.</div></div>
+<div class="phase"><h4>Phase 3 · Depth-model benchmark</h4>
+<ul><li>Run FastDepth, Lite-Mono (median-scaled), DAv2-Metric-S and Depth Pro on the same test frames.</li><li>Aggregate depth in the lower-central part of each box (median); compare with laser truth.</li><li>Record latency and memory on Pi 5 and PC.</li></ul>
+<div class="acc"><b>Accept:</b> a clear table of box-level error by model and range. Adopt dense depth only if it beats Phase 2 by ≥25% at an acceptable platform cost.</div></div>
+<div class="phase"><h4>Phase 4 · Embedded deployment</h4>
+<ul><li>Port the best candidate to the S3 (ESP-DL).</li><li>Measure FPS, SRAM/PSRAM high-water marks, flash, and current with a USB meter.</li><li>Compare QVGA and VGA; compare against a Pi 5 running the same pipeline.</li></ul>
+<div class="acc"><b>Accept:</b> ≥4 FPS end-to-end; ≥20% SRAM headroom; ≤1.5 W average; on-device accuracy within 1 percentage point of the PC reference.</div></div>
+<div class="phase"><h4>Phase 5 · Robustness</h4>
+<ul><li>Vary distance, size, camera angle and lateral offset.</li><li>Test low light, sunlight, shadows, partial occlusion, motion blur, and IR/monochrome (OV2640 without IR-cut plus IR LEDs).</li></ul>
+<div class="acc"><b>Accept:</b> per-condition error table; the reliability flag catches ≥80% of frames with &gt;25% error; no condition collapses detection recall below 70% without the flag firing.</div></div>
+<div class="phase"><h4>Phase 6 · Standalone prototype</h4>
+<ul><li>Enclosure, fixed mount, calib.bin, OTA update.</li><li>Output class, confidence, distance, σ, reliability flag and track ID as JSON over UART or MQTT.</li><li>Run a 24-hour soak test.</li></ul>
+<div class="acc"><b>Accept:</b> 24 h without reset; distance readings for a walking person stable to ±5% after 1 s of tracking; documented calibration procedure under 15 minutes.</div></div>
+</div>
+
+<h3>Validation visuals</h3>
+<figure>
+<div class="plate"><img src="assets/charts/04_predicted_vs_actual_simulated.png" alt="Scatter of estimated against true distance and box plots of signed error by distance range"></div>
+<figcaption><b>Fig. 17</b> <span class="tag t-est">simulated template</span> The plots each test run should produce: predicted against actual with a ±10% band, and signed error by range bin. These are filled with error-model samples (camera 2 m high, tilted 10°, so feet are visible only beyond about 3.2 m). Replace them with Phase 1 measurements.</figcaption>
+</figure>
+<div class="mer"><pre class="mermaid">
+flowchart LR
+  A1["Print checkerboard<br/>measure square size"] --> A2["Capture 20–30 views<br/>tilt, corners, distances"]
+  A2 --> A3["findChessboardCorners<br/>+ cornerSubPix"]
+  A3 --> A4["calibrateCamera<br/>K, dist"]
+  A4 --> A5{"Reprojection<br/>under 0.5 px?"}
+  A5 -- no --> A2
+  A5 -- yes --> A6["Save per resolution<br/>QVGA, VGA"]
+</pre></div>
+<p class="mono" style="font-size:13px;color:var(--muted)">Fig. 18 · Camera calibration procedure</p>
+</section>
+
+<!-- ============================================================ -->
+<section id="risks">
+<h2><span class="n">11</span>Risks and technical limitations</h2>
+<div class="tbl"><table>
+<thead><tr><th>Risk</th><th>Effect</th><th>Mitigation</th></tr></thead>
+<tbody>
+<tr><td>Class-prior mismatch (children, seated people, dog breeds)</td><td>Errors of 40–70% (Fig. 5)</td><td>Ground-plane cue, aspect-ratio pose flag, residual MLP, uncertainty output</td></tr>
+<tr><td>Non-flat ground, stairs, slopes</td><td>Ground-plane cue biased</td><td>Detect disagreement between the two cues and down-weight; optional per-zone ground maps</td></tr>
+<tr><td>Camera moved or bumped</td><td>Every reading shifts</td><td>Horizon/vanishing-point check at boot; flag when the walking-person height statistic drifts</td></tr>
+<tr><td>Lens distortion (wide lenses)</td><td>Edge-of-frame errors</td><td>Undistort box corners with calibrated coefficients (cheap: 4 points per box)</td></tr>
+<tr><td>Detector box quality at night / IR</td><td>Box jitter, missed feet</td><td>Fine-tune the detector on IR footage; widen σ; temporal filtering</td></tr>
+<tr><td>Small targets beyond 15 m at QVGA</td><td>Under 30 px tall, so detection and ranging both degrade</td><td>VGA capture with ROI crops; accept a shorter rated range</td></tr>
+<tr><td>Metric foundation models and unfamiliar cameras</td><td>Scale bias of tens of percent</td><td>Use only as a teacher after bias-checking against laser truth</td></tr>
+<tr><td>Licenses</td><td>Non-commercial weights block a product</td><td>Prefer Apache/MIT (DAv2-Small, ESP-DL); check each model card</td></tr>
+<tr><td>Vendor latency figures</td><td>Differ by IDF version, PSRAM speed and cache settings</td><td>Measure on your own board in Phase 4</td></tr>
+</tbody></table></div>
+<div class="callout risk"><h4>Unverified figures in this report</h4><p>Every number marked <span class="tag t-est">estimate</span> or <span class="tag t-est">model</span> comes from an explicit error model or from engineering reasoning, not from hardware tests on this project. The error-model assumptions are listed in Fig. 6 and in <code>scripts/make_figures.py</code>. None of the architectures have been built or measured yet.</p></div>
+</section>
+
+<!-- ============================================================ -->
+<section id="recommend">
+<h2><span class="n">12</span>Final recommendations</h2>
+<h3>Answers to the critical questions</h3>
+<div class="answers">
+<div class="ans"><span class="q">Q1</span><div><strong>Can an ESP32-S3 estimate the distance of individual objects with a monocular camera?</strong><p>Yes. Detection runs at about 7–8 FPS (published), and per-object ranging by geometry plus a tiny MLP costs under 1 ms (estimate).</p></div></div>
+<div class="ans"><span class="q">Q2</span><div><strong>Is dense depth estimation necessary?</strong><p>No. The output is one number per box, and two geometric cues provide it directly. Dense depth is useful only offline (labelling, sanity checks) or on a Pi or Jetson for scenes where the flat-ground assumption fails.</p></div></div>
+<div class="ans"><span class="q">Q3</span><div><strong>Can geometric estimation be accurate enough for people and common objects?</strong><p>For standing adults on flat ground with a calibrated camera: yes, around 5–10% median in practice (2–5% in the idealized model). For cars it is workable with height-based priors. For dogs, children and seated people, the size prior alone is not enough; add the ground-plane cue.</p></div></div>
+<div class="ans"><span class="q">Q4</span><div><strong>Would a small regression network beat geometry?</strong><p>As a residual on top of geometry, yes, on systematic biases such as foreshortening, pose and class priors, when trained on your mount. As a standalone box regressor it beats geometry only on its training camera and generalizes worse.</p></div></div>
+<div class="ans"><span class="q">Q5</span><div><strong>Can a lightweight depth network realistically run on an ESP32-S3?</strong><p>Not at useful resolution or rate: seconds per frame for FastDepth-class compute, limited by activation memory (estimate). A custom 64×48 head is an open research question, not a prototype path.</p></div></div>
+<div class="ans"><span class="q">Q6</span><div><strong>Which five approaches should I try first?</strong><p>(1) the hybrid estimator, (2) calibrated geometry, (3) a DisNet-style box MLP, (4) FastDepth or Lite-Mono on a Pi as a lightweight-depth reference, (5) DAv2-Metric-Small or Depth Pro as an offline teacher and benchmark.</p></div></div>
+<div class="ans"><span class="q">Q7</span><div><strong>What is the best architecture overall?</strong><p>Architecture 3 (hybrid embedded) gives the lowest cost and power, adequate latency, explainable accuracy and no extra runtime hardware.</p></div></div>
+<div class="ans"><span class="q">Q8</span><div><strong>What is the minimum additional hardware?</strong><p>None for compute if you have an ESP32-S3 with PSRAM. Add an S3 camera board ($15–25) if the existing hardware is a classic ESP32-CAM, plus a laser rangefinder or long tape and a printed checkerboard for calibration and ground truth.</p></div></div>
+<div class="ans"><span class="q">Q9</span><div><strong>What is the most practical first prototype?</strong><p>Run the S3 with the ESP-DL pedestrian detector at 224×224 on a fixed tripod mount, with calibrated geometry (size + ground fusion) and an IoU tracker, printing JSON over UART. Phase 1 can be finished in days.</p></div></div>
+<div class="ans"><span class="q">Q10</span><div><strong>What accuracy is realistic, and under what conditions?</strong><p>Standing adults, flat ground, camera 1.5–3 m high, daylight, 2–15 m: median 5–10% per frame and better after tracking. Beyond 15 m at QVGA, at night, with occlusion, or with seated people and dogs: 15–30% unless the ground cue is available. Treat these as targets for Phase 1, not as measurements.</p></div></div>
+</div>
+
+<div class="callout key">
+<h4>Recommended path</h4>
+<ol style="margin:0">
+<li>Week 1: calibrate, mount, and build the PC geometry baseline on recorded frames (Phase 1).</li>
+<li>Week 2: port to the ESP32-S3 with the ESP-DL detector, tracker and JSON output (Architecture 1 / 3 core).</li>
+<li>Weeks 3–4: collect test-range data plus synthetic data; train and INT8-export the residual MLP (Phase 2).</li>
+<li>In parallel, optionally: benchmark DAv2-Metric-S and FastDepth on a Pi or PC against the same laser truth (Phase 3), to settle whether dense depth adds anything.</li>
+</ol>
+</div>
+</section>
+
+<!-- ============================================================ -->
+<section id="refs" class="refs">
+<h2><span class="n">13</span>Research papers and references</h2>
+<h4>Object-level distance</h4>
+<ol>
+<li>Haseeb, Guan, Ristić-Durrant, Gräser. "DisNet: A novel method for distance estimation from monocular camera." PPNIV workshop, IROS 2018.</li>
+<li>Bertoni, Kreiss, Alahi. "MonoLoco: Monocular 3D Pedestrian Localization and Uncertainty Estimation." ICCV 2019. <a href="https://openaccess.thecvf.com/content_ICCV_2019/html/Bertoni_MonoLoco_Monocular_3D_Pedestrian_Localization_and_Uncertainty_Estimation_ICCV_2019_paper.html">paper</a> · <a href="https://github.com/vita-epfl/monoloco">code</a></li>
+<li>Zhu, Fang. "Learning Object-Specific Distance From a Monocular Image." ICCV 2019. <a href="https://arxiv.org/abs/1909.04182">arXiv:1909.04182</a></li>
+<li>Vajgl, Hurtik, Nejezchleba. "Dist-YOLO: Fast Object Detection with Distance Estimation." Applied Sciences 12(3), 2022.</li>
+</ol>
+<h4>Monocular depth</h4>
+<ol start="5">
+<li>Wofk, Ma, Yang, Karaman, Sze. "FastDepth: Fast Monocular Depth Estimation on Embedded Systems." ICRA 2019. <a href="https://arxiv.org/abs/1903.03273">arXiv:1903.03273</a> · <a href="https://fastdepth.mit.edu/">project</a> · <a href="https://github.com/dwofk/fast-depth">code</a></li>
+<li>Zhang, Nex, Vosselman, Kerle. "Lite-Mono." CVPR 2023. <a href="https://openaccess.thecvf.com/content/CVPR2023/html/Zhang_Lite-Mono_A_Lightweight_CNN_and_Transformer_Architecture_for_Self-Supervised_Monocular_CVPR_2023_paper.html">paper</a> · <a href="https://github.com/noahzn/Lite-Mono">code</a></li>
+<li>Godard, Mac Aodha, Firman, Brostow. "Digging Into Self-Supervised Monocular Depth Estimation" (Monodepth2). ICCV 2019. <a href="https://arxiv.org/abs/1806.01260">arXiv:1806.01260</a> · <a href="https://github.com/nianticlabs/monodepth2">code</a></li>
+<li>Yang et al. "Depth Anything V2." NeurIPS 2024. <a href="https://arxiv.org/abs/2406.09414">arXiv:2406.09414</a> · <a href="https://github.com/DepthAnything/Depth-Anything-V2">code</a> · <a href="https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Hypersim-Base">metric model card</a></li>
+<li>Hu et al. "Metric3D v2." IEEE TPAMI 2024. <a href="https://arxiv.org/abs/2404.15506">arXiv:2404.15506</a> · <a href="https://github.com/YvanYin/Metric3D">code</a></li>
+<li>Bochkovskii et al. "Depth Pro: Sharp Monocular Metric Depth in Less Than a Second." ICLR 2025. <a href="https://arxiv.org/abs/2410.02073">arXiv:2410.02073</a> · <a href="https://github.com/apple/ml-depth-pro">code</a></li>
+<li>Piccinelli et al. "UniDepthV2." 2025. <a href="https://arxiv.org/abs/2502.20110">arXiv:2502.20110</a> · <a href="https://github.com/lpiccinelli-eth/UniDepth">code</a></li>
+<li>Bhat et al. "ZoeDepth." 2023. <a href="https://arxiv.org/abs/2302.12288">arXiv:2302.12288</a> · <a href="https://github.com/isl-org/ZoeDepth">code</a></li>
+<li>Ke et al. "Marigold: Repurposing Diffusion-Based Image Generators for Monocular Depth Estimation." CVPR 2024. <a href="https://arxiv.org/abs/2312.02145">arXiv:2312.02145</a> · <a href="https://github.com/prs-eth/Marigold">code</a></li>
+</ol>
+<h4>Calibration and geometry</h4>
+<ol start="14">
+<li>Zhang. "A Flexible New Technique for Camera Calibration." IEEE TPAMI 22(11), 2000.</li>
+<li>Hartley, Zisserman. <i>Multiple View Geometry in Computer Vision</i>, 2nd ed., 2004.</li>
+<li>OpenCV camera calibration tutorial. <a href="https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html">docs.opencv.org</a></li>
+</ol>
+<h4>Embedded runtimes and vendor benchmarks</h4>
+<ol start="17">
+<li>Espressif ESP-NN (latency tables in README). <a href="https://components.espressif.com/components/espressif/esp-nn/versions/1.4.1/readme">component registry</a></li>
+<li>Espressif esp-tflite-micro. <a href="https://github.com/espressif/esp-tflite-micro">github.com/espressif/esp-tflite-micro</a></li>
+<li>Espressif ESP-DL and pedestrian_detect (latency in README). <a href="https://github.com/espressif/esp-dl">esp-dl</a> · <a href="https://components.espressif.com/components/espressif/pedestrian_detect/versions/0.3.3/readme">pedestrian_detect 0.3.3</a></li>
+<li>Espressif esp-detection (espdet_pico). <a href="https://github.com/espressif/esp-detection">github.com/espressif/esp-detection</a></li>
+<li>Plumerai People Detection on ESP32-S3 (vendor blog, 2023). <a href="https://blog.plumerai.com/2023/03/espressif_esp32-s3_support/">blog.plumerai.com</a></li>
+<li>Depth Anything ONNX exports. <a href="https://github.com/fabio-sim/Depth-Anything-ONNX">fabio-sim/Depth-Anything-ONNX</a></li>
+</ol>
+<h4>Datasets and simulators</h4>
+<ol start="23">
+<li>KITTI · nuScenes · Waymo Open · NYU Depth V2 · DIODE · Hypersim · TartanAir · ETH3D · MegaDepth · CARLA (links in Section 08).</li>
+<li>BlenderProc. <a href="https://github.com/DLR-RM/BlenderProc">github.com/DLR-RM/BlenderProc</a></li>
+</ol>
+</section>
+
+<footer>
+<p>Figures are reusable: <code>assets/charts/*.svg|png</code> (regenerate with <code>python scripts/make_figures.py</code>), <code>assets/diagrams/*.svg</code>, and Mermaid sources in <code>assets/diagrams/*.mmd</code>. Published figures were checked against the linked sources on 12 Nov 2026. Re-check licenses and versions before relying on them.</p>
+</footer>
+</main>
+</div>

@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 330" font-family="DejaVu Sans, Arial, sans-serif" font-size="13">
+  <rect width="760" height="330" fill="#ffffff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#18212f">Pinhole model: similar triangles give Z = f · H_real / h_image</text>
+  <!-- optical axis -->
+  <line x1="40" y1="200" x2="730" y2="200" stroke="#5b6577" stroke-dasharray="5 4"/>
+  <text x="640" y="220" fill="#5b6577" font-size="12">optical axis</text>
+  <!-- image plane -->
+  <line x1="90" y1="120" x2="90" y2="280" stroke="#2f5fd0" stroke-width="3"/>
+  <text x="10" y="150" fill="#2f5fd0" font-size="12">image</text>
+  <text x="10" y="165" fill="#2f5fd0" font-size="12">plane</text>
+  <!-- pinhole -->
+  <circle cx="230" cy="200" r="5" fill="#18212f"/>
+  <text x="205" y="262" fill="#18212f" font-size="12">pinhole / lens</text>
+  <text x="205" y="277" fill="#18212f" font-size="12">centre (C)</text>
+  <!-- object -->
+  <line x1="640" y1="200" x2="640" y2="60" stroke="#0e7c74" stroke-width="5"/>
+  <circle cx="640" cy="52" r="9" fill="#0e7c74"/>
+  <text x="655" y="130" fill="#0e7c74" font-weight="bold">H_real</text>
+  <text x="655" y="147" fill="#0e7c74" font-size="12">(e.g. 1.70 m)</text>
+  <!-- rays -->
+  <line x1="640" y1="52" x2="90" y2="276" stroke="#c4561a" stroke-width="1.6"/>
+  <line x1="640" y1="200" x2="90" y2="200" stroke="#c4561a" stroke-width="1.6"/>
+  <!-- inverted image -->
+  <line x1="90" y1="200" x2="90" y2="261" stroke="#c4561a" stroke-width="5"/>
+  <text x="10" y="240" fill="#c4561a" font-weight="bold">h_image</text>
+  <text x="10" y="256" fill="#c4561a" font-size="12">(pixels)</text>
+  <!-- dimension f -->
+  <line x1="90" y1="300" x2="230" y2="300" stroke="#18212f"/>
+  <line x1="90" y1="294" x2="90" y2="306" stroke="#18212f"/>
+  <line x1="230" y1="294" x2="230" y2="306" stroke="#18212f"/>
+  <text x="122" y="320" fill="#18212f">f (focal length, px)</text>
+  <!-- dimension Z -->
+  <line x1="230" y1="300" x2="640" y2="300" stroke="#18212f"/>
+  <line x1="640" y1="294" x2="640" y2="306" stroke="#18212f"/>
+  <text x="370" y="320" fill="#18212f">Z (distance along optical axis, m)</text>
+  <!-- equation box -->
+  <rect x="110" y="42" width="280" height="88" rx="6" fill="#f2f5f9" stroke="#d6dbe4"/>
+  <text x="126" y="68" fill="#18212f">h_image / f  =  H_real / Z</text>
+  <text x="126" y="92" fill="#18212f" font-weight="bold">Z = f · H_real / h_image</text>
+  <text x="126" y="116" fill="#5b6577" font-size="12">f_px = (W/2) / tan(HFOV/2)</text>
+</svg>

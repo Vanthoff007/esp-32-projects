@@ -1,0 +1,24 @@
+flowchart TB
+  subgraph ONCE["Install time · laptop, once"]
+    C1["Checkerboard calibration<br/>K, distortion"] --> C2["Measure hc, θ<br/>check with horizon"]
+    C2 --> C3["Optional: DAv2 / Depth Pro<br/>sanity-check ground plane"]
+    C3 --> C4["Write calib.bin<br/>to flash"]
+  end
+  subgraph RUN["Runtime · ESP32-S3"]
+    A["Capture QVGA"] --> B["INT8 detector"]
+    B --> E1["Size-prior Z + σ"]
+    B --> E2["Ground-plane D + σ<br/>if feet visible"]
+    E1 --> FU["Fuse"]
+    E2 --> FU
+    FU --> RM["Residual MLP<br/>bias + σ"]
+    RM --> TK["Tracker + Kalman"]
+    TK --> RL["Reliability rules<br/>truncated, sitting, σ too large"]
+    RL --> OUT3["class · conf · m · σ · ID · ok"]
+  end
+  subgraph LEARN["Offline training · PC"]
+    L1["Test-range + synthetic data"] --> L2["Train residual MLP"]
+    L2 --> L3["INT8 export<br/>ESP-DL / TFLM"]
+  end
+  C4 -.-> E1
+  C4 -.-> E2
+  L3 -.-> RM

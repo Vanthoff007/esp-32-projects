@@ -1,0 +1,13 @@
+flowchart LR
+  CAM["Camera frame"] --> DET["INT8 detector<br/>box, class, conf"]
+  DET --> GEO1["Size prior<br/>Z = f·H/h"]
+  DET --> GEO2["Ground plane<br/>D = hc / tan(θ+α)"]
+  DET --> FEAT["Box features<br/>u, v, w, h, aspect"]
+  GEO1 --> FUSE["Inverse-variance<br/>fusion"]
+  GEO2 --> FUSE
+  FEAT --> MLP["Residual MLP<br/>bias + σ"]
+  FUSE --> MLP
+  MLP --> KF["Tracker + Kalman<br/>on 1/Z"]
+  KF --> OUT["class · m · σ · ID"]
+  CAL[("Calibration<br/>K, hc, θ")] -.-> GEO1
+  CAL -.-> GEO2

@@ -7,6 +7,7 @@ A collection of independent ESP32 projects. Each project lives in its own folder
 | Project | Board | Status | Summary |
 |---|---|---|---|
 | [Night Sentinel](projects/night-sentinel/) | DFRobot DFR1154 (ESP32-S3 AI Camera) | Working end to end; modular firmware 0.10.0 (platform / models / app). Field tests and model experiments in progress | Night-time person alert that runs entirely on the camera board: IR night vision, on-device person detection, then a spoken warning, phone push and JPEG evidence on SD |
+| [Mono Ranger](projects/mono-ranger/) | ESP32-S3 (camera board TBD) | Research: feasibility survey done, no firmware yet | Estimates the distance to objects from a single camera; the report ranks approaches and checks what fits on the ESP32-S3 versus a Pi or Jetson |
 
 ## Repository layout
 
@@ -16,6 +17,7 @@ esp32-projects/
 ├── LICENSE              Apache-2.0, covers every project unless a project says otherwise
 ├── .gitignore           rules shared by all projects (build output, sdkconfig, editors, Python)
 └── projects/
+    ├── mono-ranger/     monocular distance estimation (research stage)
     └── night-sentinel/  one complete ESP-IDF project (see its README)
 ```
 

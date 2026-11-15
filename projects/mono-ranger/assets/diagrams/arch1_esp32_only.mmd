@@ -1,0 +1,7 @@
+flowchart LR
+  S["OV2640 / OV3660<br/>QVGA RGB565"] --> P["Resize 224×224<br/>ESP-DL preprocess"]
+  P --> D["INT8 detector<br/>pedestrian / espdet"]
+  D --> G["Geometry<br/>size + ground"]
+  G --> M["Residual MLP<br/>INT8, ~5k params"]
+  M --> T["IoU tracker<br/>+ Kalman 1/Z"]
+  T --> O["JSON via UART / MQTT<br/>optional JPEG preview"]

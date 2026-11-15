@@ -1,0 +1,7 @@
+flowchart LR
+  CAM2["CSI / USB camera"] --> ISP2["ISP + VIC"]
+  ISP2 --> GPU["Ampere GPU<br/>Orin Nano: 1024 CUDA cores"]
+  GPU <--> UM["Unified LPDDR5<br/>4–8 GB, shared CPU/GPU"]
+  CPU2["6× Cortex-A78AE"] <--> UM
+  TRT["TensorRT engine<br/>FP16 / INT8"] --> GPU
+  GPU --> OUT2["Depth + detection<br/>real-time"]

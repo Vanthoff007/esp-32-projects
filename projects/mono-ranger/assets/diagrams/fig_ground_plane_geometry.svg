@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 320" font-family="DejaVu Sans, Arial, sans-serif" font-size="13">
+  <rect width="760" height="320" fill="#ffffff"/>
+  <text x="20" y="28" font-size="15" font-weight="bold" fill="#18212f">Ground-plane (foot-point) model: size-independent distance</text>
+  <!-- ground -->
+  <line x1="30" y1="260" x2="740" y2="260" stroke="#5b6577" stroke-width="2"/>
+  <text x="660" y="282" fill="#5b6577" font-size="12">flat ground</text>
+  <!-- pole + camera -->
+  <line x1="80" y1="260" x2="80" y2="120" stroke="#18212f" stroke-width="3"/>
+  <rect x="70" y="106" width="34" height="22" rx="3" fill="#2f5fd0"/>
+  <text x="40" y="96" fill="#2f5fd0" font-size="12">camera</text>
+  <!-- h_c dim -->
+  <line x1="55" y1="117" x2="55" y2="260" stroke="#18212f"/>
+  <line x1="49" y1="117" x2="61" y2="117" stroke="#18212f"/>
+  <line x1="49" y1="260" x2="61" y2="260" stroke="#18212f"/>
+  <text x="18" y="196" fill="#18212f" font-weight="bold">h_c</text>
+  <!-- horizon line -->
+  <line x1="104" y1="117" x2="720" y2="117" stroke="#5b6577" stroke-dasharray="4 4"/>
+  <text x="620" y="110" fill="#5b6577" font-size="12">horizontal</text>
+  <!-- optical axis tilted down by pitch -->
+  <line x1="104" y1="117" x2="720" y2="226" stroke="#2f5fd0" stroke-dasharray="7 4"/>
+  <text x="560" y="247" fill="#2f5fd0" font-size="12">optical axis (pitch θ)</text>
+  <!-- person -->
+  <line x1="520" y1="260" x2="520" y2="160" stroke="#0e7c74" stroke-width="5"/>
+  <circle cx="520" cy="152" r="8" fill="#0e7c74"/>
+  <!-- ray to feet -->
+  <line x1="104" y1="117" x2="520" y2="260" stroke="#c4561a" stroke-width="2"/>
+  <text x="170" y="232" fill="#c4561a" font-size="12">ray through bbox bottom row y_b</text>
+  <!-- angle arc -->
+  <path d="M 184 117 A 80 80 0 0 1 180 143" fill="none" stroke="#c4561a" stroke-width="1.5"/>
+  <text x="135" y="172" fill="#c4561a" font-size="12">θ + α</text>
+  <!-- D dim -->
+  <line x1="80" y1="292" x2="520" y2="292" stroke="#18212f"/>
+  <line x1="80" y1="286" x2="80" y2="298" stroke="#18212f"/>
+  <line x1="520" y1="286" x2="520" y2="298" stroke="#18212f"/>
+  <text x="250" y="312" fill="#18212f">D (ground distance)</text>
+  <!-- equation -->
+  <rect x="540" y="38" width="205" height="62" rx="6" fill="#f2f5f9" stroke="#d6dbe4"/>
+  <text x="552" y="62" fill="#18212f">α = atan((y_b − c_y) / f_y)</text>
+  <text x="552" y="86" fill="#18212f" font-weight="bold">D = h_c / tan(θ + α)</text>
+</svg>

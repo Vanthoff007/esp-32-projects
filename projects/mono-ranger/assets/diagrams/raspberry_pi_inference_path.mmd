@@ -1,0 +1,8 @@
+flowchart LR
+  CSI["CSI camera<br/>libcamera / Picamera2"] --> ISP["ISP<br/>Pi 5: RP1 + BCM2712"]
+  ISP --> CPU["4× Cortex-A76 2.4 GHz<br/>Pi 4: 4× A72 1.5–1.8 GHz"]
+  CPU --> RT["NCNN · ONNX Runtime · TFLite<br/>INT8 / FP16 NEON"]
+  CPU <--> MEM["LPDDR4X 2–16 GB"]
+  CPU -- "PCIe 2.0 x1" --> NPU["Optional Hailo-8L<br/>AI Kit / AI HAT+"]
+  RT --> OUT["Distances over<br/>MQTT / UART"]
+  NPU --> OUT

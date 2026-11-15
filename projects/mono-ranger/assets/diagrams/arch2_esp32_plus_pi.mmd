@@ -1,0 +1,13 @@
+flowchart LR
+  subgraph ESP["ESP32-S3 node"]
+    S2["Camera VGA"] --> J["JPEG encode"]
+    J --> W["Wi-Fi stream<br/>MJPEG / RTSP-lite"]
+  end
+  subgraph PI["Raspberry Pi 5"]
+    R["Decode"] --> Y["YOLO-n detector<br/>NCNN / Hailo"]
+    R --> Dp["Metric depth<br/>FastDepth or DAv2-S"]
+    Y --> F["Fuse: box median depth<br/>+ geometry + tracker"]
+    Dp --> F
+    F --> O2["MQTT / dashboard"]
+  end
+  W --> R
